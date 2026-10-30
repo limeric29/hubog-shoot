@@ -28,7 +28,7 @@ const LABEL: Record<ShotStatus, string> = {
   checking: 'Checking it is your product',
   redoing: 'Not quite right. Reshooting',
   done: 'Ready',
-  failed: 'Could not match your product',
+  failed: 'Could not finish this photo',
 };
 
 const PLATFORM = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok Shop', facebook: 'Facebook' } as const;

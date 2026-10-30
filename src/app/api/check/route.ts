@@ -13,10 +13,12 @@ export async function POST(req: Request) {
       name: text(body.product?.name, 'product.name', 200),
       label_text: text(body.product?.label_text, 'product.label_text', 300),
     } as Product;
-    const language = text(body.language, 'language', 200);
+    // Existing clients send the full brief in `language`. Match /api/plan's limit;
+    // checkText already keeps only a short excerpt for the model's language hint.
+    const sellerWords = text(body.language, 'language', 2000);
     return sparkJson<Verdict>({
       system: CHECK_SYSTEM,
-      text: checkText(product, language),
+      text: checkText(product, sellerWords),
       images: [photo, image],
       name: 'verdict',
       schema: VERDICT_SCHEMA,
