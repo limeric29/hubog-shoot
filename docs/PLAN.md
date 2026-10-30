@@ -23,7 +23,7 @@ Hubog Shoot is being built from zero for the [Meta Global AI Developer Hackathon
 
 - Next.js 16.4.3 (App Router) and React 19.3, TypeScript 5.9, Tailwind 4. Every version is pinned exactly and the lockfile is committed.
 - Meta Model API through the OpenAI SDK (`openai` 7.45.0) at `https://api.meta.ai/v1`, plus `@meta-sam/parser` 0.1.0 for SAM output.
-- Hosting: Cloudflare Workers through OpenNext, live since Oct 31 at https://hubog-shoot.hubog.workers.dev. The Meta key is a Worker secret; `SPEND_CAP_USD` and `HUBOG_KILL` are Worker vars.
+- Hosting: Cloudflare Workers through OpenNext, live since Oct 31 at https://shoot.hubog.app (also hubog-shoot.hubog.workers.dev). The Meta key is a Worker secret; `SPEND_CAP_USD` and `HUBOG_KILL` are Worker vars.
 - Mobile-first UI, because sellers are on phones.
 
 ## Day by day

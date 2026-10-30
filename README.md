@@ -4,7 +4,7 @@ A product-photo studio for small sellers in the Philippines. You upload one phon
 
 *Hubog* means "to shape" in Filipino.
 
-**Live:** https://hubog-shoot.hubog.workers.dev
+**Live:** https://shoot.hubog.app
 
 ## Built for the Meta Global AI Developer Hackathon
 
