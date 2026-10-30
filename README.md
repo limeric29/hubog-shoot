@@ -4,6 +4,8 @@ A product-photo studio for small sellers in the Philippines. You upload one phon
 
 *Hubog* means "to shape" in Filipino.
 
+**Live:** https://hubog-shoot.hubog.workers.dev
+
 ## Built for the Meta Global AI Developer Hackathon
 
 Hubog Shoot is being built from zero during the [Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon) (Oct 26 – Nov 4, 2026), Indie Developer track, theme "Build for Your World". The first commit is Oct 27, 2026, and every line of code in this repo was written during the event.
@@ -39,6 +41,17 @@ npm install
 cp .env.example .env.local   # then add MODEL_API_KEY
 npm run smoke                # checks every model, costs about $0.02
 npm run dev                  # http://localhost:3000
+```
+
+## Deploy
+
+The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cloudflare). The Meta key is a Worker secret, never a file in the repo.
+
+```bash
+npm run cf:build
+npx wrangler deploy --secrets-file <file containing MODEL_API_KEY=...>   # first deploy only; delete the file after
+npx wrangler secret put MODEL_API_KEY                                    # later changes to the key
+npm run cf:deploy                                                        # later deploys
 ```
 
 One full run costs about $0.15–0.30 of Meta credit. Set `HUBOG_KILL=1` to pause every paid call and `SPEND_CAP_USD` to stop at a total. Each paid call also writes a `{"t":"spend",...}` line to the server log.

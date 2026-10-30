@@ -46,3 +46,8 @@ next-env.d.ts
 
 # smoke test output
 /.smoke/
+
+# OpenNext / wrangler
+.open-next/
+.wrangler/
+.dev.vars

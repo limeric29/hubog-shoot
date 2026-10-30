@@ -1,0 +1,20 @@
+// Hubog Shoot on Cloudflare Workers, through the OpenNext adapter (`npm run cf:build` builds .open-next/).
+// Vars and secrets reach the app as process.env.
+// Secret (never here): npx wrangler secret put MODEL_API_KEY   # the Meta Model API key
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "hubog-shoot",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-08",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS", "run_worker_first": false },
+  "upload_source_maps": true,
+  "observability": { "enabled": true },
+  "vars": {
+    // Stops every paid call once this instance has spent this much (USD). Set HUBOG_KILL to "1" to pause them all.
+    "SPEND_CAP_USD": "40"
+  },
+  "secrets": { "required": ["MODEL_API_KEY"] }
+}

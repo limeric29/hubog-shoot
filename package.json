@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "smoke": "node --env-file-if-exists=.env.local scripts/smoke.mjs"
+    "smoke": "node --env-file-if-exists=.env.local scripts/smoke.mjs",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
   },
   "dependencies": {
     "@meta-sam/parser": "0.1.0",
@@ -18,6 +21,7 @@
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "1.20.13",
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "20.19.43",
     "@types/react": "19.3.0",
@@ -25,7 +29,8 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "4.3.3",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "wrangler": "4.150.0"
   },
   "engines": {
     "node": ">=22.9.0"
