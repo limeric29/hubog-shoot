@@ -1,0 +1,78 @@
+{
+  "brief": "Homemade calamansi juice, 300ml, ₱120. Fresh from Davao. Walang preservatives.",
+  "product": {
+    "name": "Homemade Calamansi Juice",
+    "category": "beverages",
+    "colors": ["yellow", "green", "brown"],
+    "label_text": "HOMEMADE CALAMANSI JUICE · fresh · no preservatives · 300ml",
+    "sam_phrase": "glass bottle of calamansi juice"
+  },
+  "listing": {
+    "title": "Homemade Calamansi Juice, 300ml — Fresh from Davao",
+    "description": "Preskong calamansi juice, gawa sa Davao.\n\nMay tunay na calamansi pulp at walang preservatives. Nasa 300ml glass bottle na may cork.\n\n₱120 bawat bote. Mas masarap kapag malamig. Message us to order!",
+    "hashtags": ["CalamansiJuice", "DavaoMade", "SupportLocalPH", "Homemade", "WalangPreservatives"]
+  },
+  "question": "Saan puwedeng umorder at anong areas ang puwedeng i-deliver?",
+  "shots": [
+    {
+      "id": "main",
+      "kind": "main",
+      "title": "Your shop’s main image",
+      "platform": "shopee",
+      "aspect": "1:1",
+      "scene": "A clean white backdrop with the original product centered.",
+      "backdrop": "A clean white backdrop.",
+      "headline": "",
+      "caption": "Homemade calamansi juice, 300ml. ₱120 lang bawat bote!",
+      "image": "/examples/main.jpg"
+    },
+    {
+      "id": "lifestyle-1",
+      "kind": "lifestyle",
+      "title": "Morning at home",
+      "platform": "facebook",
+      "aspect": "4:5",
+      "scene": "A sunlit wooden table in a Filipino home with fresh calamansi nearby.",
+      "backdrop": "A sunlit wooden table with fresh calamansi and no bottle.",
+      "headline": "Preskong Sarap Davao!",
+      "caption": "Preskong kasama sa almusal o merienda. Gawang Davao, para sa araw-araw.",
+      "image": "/examples/lifestyle.jpg"
+    },
+    {
+      "id": "lifestyle-2",
+      "kind": "lifestyle",
+      "title": "Merienda in the garden",
+      "platform": "shopee",
+      "aspect": "4:5",
+      "scene": "A woven rattan table in a leafy tropical garden in afternoon light.",
+      "backdrop": "An empty woven rattan table in a leafy tropical garden.",
+      "headline": "Pampalamig sa Tanghali!",
+      "caption": "Mainit ang hapon? Palamigin muna ang calamansi juice at enjoy sa merienda.",
+      "image": "/examples/garden.jpg"
+    },
+    {
+      "id": "detail",
+      "kind": "detail",
+      "title": "A closer look",
+      "platform": "lazada",
+      "aspect": "1:1",
+      "scene": "A close-up of the juice bottle with calamansi fruit in natural light.",
+      "backdrop": "A light tabletop with calamansi fruit in natural light and no bottle.",
+      "headline": "",
+      "caption": "Kita ang tunay na calamansi pulp. Walang preservatives, puro sarap.",
+      "image": "/examples/detail.jpg"
+    },
+    {
+      "id": "promo",
+      "kind": "promo",
+      "title": "Ready for your feed",
+      "platform": "tiktok",
+      "aspect": "9:16",
+      "scene": "A bright vertical citrus scene with the juice bottle and fresh calamansi.",
+      "backdrop": "A bright vertical citrus scene with fresh calamansi and no bottle.",
+      "headline": "Asim na Nakakagana!",
+      "caption": "Fresh calamansi juice from Davao. 300ml for ₱120. Message us to order!",
+      "image": "/examples/promo.jpg"
+    }
+  ]
+}

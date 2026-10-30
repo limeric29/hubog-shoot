@@ -81,8 +81,8 @@ So one full shoot costs roughly $0.20–0.30.
 ## Rules checklist (Indie)
 
 - [ ] Repo is public.
-- [ ] Every line of code is written during the event. The first commit is Oct 27, and no Hubog code is copied in.
-- [ ] Prior work is called out in the README and submission. The only one is the Hubog name, which belongs to the owner's existing product; no code is shared.
+- [ ] The application logic and model prompts are written during the event. The first commit is Oct 27. Existing Hubog branding and third-party fonts are disclosed in the README.
+- [ ] Prior work is called out in the README and submission: the owner's existing Hubog name, logo assets, palette and typography, plus third-party fonts. No Hubog application logic or model prompts are shared.
 - [ ] The demo shows only what was built here.
 - [ ] The 3-minute demo video is public, with a voiceover.
 - [ ] Nothing on the avoid list: no plain chat wrapper, no simple image analyzer, nothing medical or political.

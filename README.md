@@ -10,7 +10,7 @@ A product-photo studio for small sellers in the Philippines. You upload one phon
 
 Hubog Shoot is being built from zero during the [Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon) (Oct 26 – Nov 4, 2026), Indie Developer track, theme "Build for Your World". The first commit is Oct 27, 2026, and every line of code in this repo was written during the event.
 
-**Prior work:** the name Hubog comes from the author's existing product at hubog.app. No code, prompts or assets from it are used here.
+**Prior work:** the Hubog name, original logo and icons, palette, and type system come from the author's existing product at hubog.app. The Shoot descriptor and studio layout were created for this project. No application logic or model prompts are copied from hubog.app. A generated logo exploration and its prompt are recorded in `docs/brand`; the site uses the original Hubog lockup unchanged with a separately rendered Shoot descriptor. Fonts are third-party assets under the SIL Open Font License, included alongside the font files.
 
 The plan, the schedule and the rules checklist are in [docs/PLAN.md](docs/PLAN.md).
 

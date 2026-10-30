@@ -1,6 +1,8 @@
 'use client';
 
 import type { Shot, Verdict } from '@/lib/types';
+import { Icon } from './icon';
+import styles from './shot-card.module.css';
 
 export type ShotStatus = 'queued' | 'shooting' | 'checking' | 'redoing' | 'done' | 'failed';
 
@@ -29,61 +31,52 @@ const LABEL: Record<ShotStatus, string> = {
   failed: 'Could not match your product',
 };
 
-const ASPECT = { '1:1': '1 / 1', '4:5': '4 / 5', '9:16': '9 / 16' } as const;
+const PLATFORM = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok Shop', facebook: 'Facebook' } as const;
 
 export function ShotCard({ shot, state, fileName, onRedo, onFix }: { shot: Shot; state: ShotState; fileName: string; onRedo: () => void; onFix?: () => void }) {
   const busy = state.status === 'queued' || state.status === 'shooting' || state.status === 'checking' || state.status === 'redoing';
   return (
-    <article className="flex flex-col gap-2 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-3">
-      <div className="relative overflow-hidden rounded-xl bg-[var(--line)]" style={{ aspectRatio: ASPECT[shot.aspect] }}>
+    <article className={styles.card} aria-label={shot.title}>
+      <div className={styles.photoMat} aria-busy={busy}>
         {state.image ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={state.image} alt={shot.title} className="h-full w-full object-cover" />
+          <img src={state.image} alt={shot.title} className={styles.image} />
         ) : (
-          <div className={`grid h-full w-full place-items-center p-4 text-center text-sm text-[var(--muted)] ${busy ? 'animate-pulse' : ''}`}>{state.error ?? LABEL[state.status]}</div>
+          <div className={styles.emptyPhoto}><Icon name="photo" width="34" height="34" /><span>{busy ? 'Finding your best angle' : 'Let’s try this photo again'}</span></div>
         )}
         {state.status === 'done' && (
-          <span className="absolute left-2 top-2 rounded-full bg-black/65 px-2 py-0.5 text-xs font-semibold text-white">{state.composite ? 'Your real product, AI scene' : state.real ? 'Your real photo' : 'AI-made scene'}</span>
+          <span className={styles.photoLabel}>{state.composite ? 'Your real product, AI scene' : state.real ? 'Your real photo' : 'AI-made scene'}</span>
         )}
+        {busy && state.image && <div className={styles.busyOverlay}>Taking another look…</div>}
       </div>
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="font-bold leading-tight">{shot.title}</h3>
-          <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
-            {shot.platform} · {shot.aspect}
-          </p>
+      <div className={styles.cardBody}>
+        <div className={styles.cardHeading}>
+          <h3>{shot.title}</h3>
+          <span className={styles.aspect}>{shot.aspect}</span>
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${state.status === 'done' ? 'bg-green-100 text-green-900' : state.status === 'failed' ? 'bg-orange-100 text-orange-900' : 'bg-[var(--line)] text-[var(--muted)]'}`}>
-          {state.status === 'done' ? (state.verdict?.pass || state.real ? '✓ Your product' : 'Ready') : LABEL[state.status]}
-        </span>
-      </div>
-      {state.verdict?.seller_note && <p className="text-sm text-[var(--muted)]">{state.verdict.seller_note}</p>}
-      {state.rejected?.map((r, i) => (
-        <div key={i} className="flex items-center gap-2 rounded-lg bg-orange-50 p-2 text-xs text-orange-900">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={r.image} alt="Rejected try" className="h-12 w-12 shrink-0 rounded object-cover opacity-80" />
-          <span>
-            <strong>Rejected try {i + 1}.</strong> {r.note}
-          </span>
+        <p className={styles.platform}>{PLATFORM[shot.platform]}</p>
+        <p role="status" className={`${styles.status} ${state.status === 'done' ? styles.ready : state.status === 'failed' ? styles.failed : ''}`}>
+          {state.status === 'done' ? <Icon name="check" width="14" height="14" /> : <span className={busy ? styles.workingDot : styles.statusDot} />}
+          {state.status === 'done' ? (state.verdict?.pass || state.real ? 'Product checked' : 'Ready') : LABEL[state.status]}
+        </p>
+        {state.error && <p className={styles.error}>{state.error}</p>}
+        {state.verdict?.seller_note && <p className={styles.note}>{state.verdict.seller_note}</p>}
+        {!!state.rejected?.length && <details className={styles.rejected}>
+          <summary>{state.rejected.length} rejected {state.rejected.length === 1 ? 'try' : 'tries'}</summary>
+          {state.rejected.map((r, i) => (
+            <div key={i} className={styles.rejectedTry}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={r.image} alt={`Rejected try ${i + 1}`} width="44" height="44" />
+              <p><strong>Try {i + 1}.</strong> {r.note}</p>
+            </div>
+          ))}
+        </details>}
+        {shot.caption && <p className={styles.caption}>{shot.caption}</p>}
+        <div className={styles.actions}>
+          {state.status === 'done' && state.image && <a href={state.image} download={`${fileName}-${shot.id}.jpg`} className={styles.download}><Icon name="download" width="15" height="15" />Download</a>}
+          {onFix && state.status === 'done' && <button type="button" onClick={onFix} className={styles.secondary}>Fix cutout</button>}
+          {(state.status === 'failed' || (!onFix && state.status === 'done')) && <button type="button" onClick={onRedo} className={styles.secondary}><Icon name="refresh" width="14" height="14" />{state.status === 'failed' ? 'Try again' : 'Reshoot'}</button>}
         </div>
-      ))}
-      {shot.caption && <p className="text-sm">{shot.caption}</p>}
-      <div className="mt-auto flex flex-wrap gap-2">
-        {state.status === 'done' && state.image && (
-          <a href={state.image} download={`${fileName}-${shot.id}.jpg`} className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-bold text-white">
-            Download
-          </a>
-        )}
-        {onFix && state.status === 'done' && (
-          <button type="button" onClick={onFix} className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm font-semibold">
-            Fix cutout
-          </button>
-        )}
-        {!onFix && (state.status === 'done' || state.status === 'failed') && (
-          <button type="button" onClick={onRedo} className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm font-semibold">
-            {state.status === 'failed' ? 'Try again' : 'Reshoot'}
-          </button>
-        )}
       </div>
     </article>
   );

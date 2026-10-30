@@ -1,25 +1,85 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f7f1e6;
-  --ink: #1c1a17;
-  --muted: #6b645a;
-  --card: #fffdf8;
-  --line: #e6dccb;
-  --accent: #4f7d12;
-  --warn: #b4531a;
+  /* Hubog identity: values from hubog.app's design handoff and current tokens. */
+  --hubog-cyan: #00dde5;
+  --hubog-blue: #1677ff;
+  --hubog-blue-text: #0b5ed7;
+  --hubog-violet: #a855f7;
+  --hubog-navy: #080f28;
+  --hubog-cloud: #f7f9fd;
+  --hubog-white: #ffffff;
+  --bg: var(--hubog-cloud);
+  --ink: var(--hubog-navy);
+  --muted: #4a5280;
+  --text-secondary: #3b4370;
+  --text-placeholder: #6b7299;
+  --card: var(--hubog-white);
+  --line: #e1e5f2;
+  --line-control: #c8cfe6;
+  --line-field: #8087ae;
+  --accent: var(--hubog-blue-text);
+  --accent-soft: #e6f1ff;
+  --surface-alt: #eef0f7;
+  --button-bg: var(--hubog-navy);
+  --button-hover: #1a2450;
+  --success: #0b6b3a;
+  --warn: #8a4b00;
+  --warning-bg: #fff1e3;
+  --danger: #a8344f;
+  --danger-bg: #fff6f8;
+  --danger-border: #f2c4ce;
+  --photo-label-bg: #ffffffed;
+  --photo-overlay: #f7f9fdd9;
+  --photo-shadow: 0 8px 20px #080f2814;
   color-scheme: light;
 }
 
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--ink);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
 }
 
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-body), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, textarea, summary, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, summary {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--hubog-blue);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 2px var(--hubog-white);
+}
+
+@media (forced-colors: active) {
+  button, input, textarea { border: 1px solid ButtonText; }
+  :focus-visible { outline: 2px solid Highlight; box-shadow: none; }
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

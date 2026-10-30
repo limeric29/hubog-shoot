@@ -1,0 +1,39 @@
+.card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 17px; background: var(--card); }
+.photoMat { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1 / 1.1; overflow: hidden; border-bottom: 1px solid var(--line); background: var(--surface-alt); padding: 15px; }
+.image { display: block; width: 100%; height: 100%; object-fit: contain; }
+.photoLabel { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); border: 1px solid var(--line); border-radius: 6px; background: var(--photo-label-bg); padding: 5px 8px; color: var(--ink); font-size: 10px; font-weight: 600; line-height: 1.5; }
+.emptyPhoto { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 25px; color: var(--muted); font-size: 12px; text-align: center; }
+.emptyPhoto > svg { color: var(--line-field); }
+.busyOverlay { position: absolute; inset: 0; display: grid; place-items: center; background: var(--photo-overlay); padding: 20px; color: var(--accent); font-size: 13px; }
+.cardBody { padding: 18px; }
+.cardHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.cardHeading h3 { min-width: 0; font-family: var(--font-display), sans-serif; font-size: 20px; font-weight: 600; letter-spacing: -.5px; line-height: 1.25; overflow-wrap: anywhere; }
+.aspect { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 5px; padding: 3px 5px; color: var(--muted); font-size: 10px; line-height: 1.2; }
+.platform { margin-top: 5px; color: var(--muted); font-size: 11px; }
+.status { display: flex; align-items: center; gap: 6px; margin-top: 14px; color: var(--accent); font-size: 11px; font-weight: 600; line-height: 1.5; }
+.ready { color: var(--success); }
+.failed { color: var(--warn); }
+.statusDot, .workingDot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: currentColor; }
+.workingDot { animation: working 1.5s ease-in-out infinite; }
+@keyframes working { 50% { opacity: .3; } }
+.note { margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.error { margin-top: 8px; color: var(--warn); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.rejected { margin-top: 12px; border-radius: 8px; background: var(--warning-bg); padding: 10px; color: var(--warn); font-size: 10px; line-height: 1.7; }
+.rejected summary { font-weight: 600; }
+.rejectedTry { display: flex; align-items: flex-start; gap: 9px; margin-top: 10px; }
+.rejectedTry img { width: 44px; height: 44px; flex-shrink: 0; border-radius: 4px; object-fit: cover; }
+.caption { margin-top: 12px; color: var(--text-secondary); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 17px; }
+.actions:empty { display: none; }
+.download, .secondary { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; font-size: 11px; font-weight: 600; line-height: 1.3; }
+.download { border-color: var(--button-bg); background: var(--button-bg); color: var(--hubog-white); }
+.download:hover { background: var(--button-hover); }
+.secondary { color: var(--ink); background: var(--card); }
+.secondary:hover { background: var(--bg); }
+
+@media (max-width: 540px) {
+  .photoMat { aspect-ratio: 1 / 1.05; padding: 16px; }
+  .cardBody { padding: 18px; }
+  .cardHeading h3 { font-size: 22px; }
+  .download, .secondary { min-height: 42px; padding-inline: 13px; font-size: 12px; }
+}
