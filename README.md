@@ -12,6 +12,15 @@ Hubog Shoot is being built from zero during the [Meta Global AI Developer Hackat
 
 The plan, the schedule and the rules checklist are in [docs/PLAN.md](docs/PLAN.md).
 
+## How it works
+
+1. **Brief.** One phone photo, plus a description typed or spoken in English, Filipino or Taglish.
+2. **Plan.** Muse Spark reads the photo and plans five shots (main, two lifestyle scenes, a close-up, a vertical promo) as JSON, with captions and a listing in the seller's language.
+3. **Shoot.** Muse Image renders each scene with the seller's photo as the reference.
+4. **Check.** Muse Spark compares each shot with the real photo: same shape, colour and label text? A shot that changed the product is reshot once. If it fails again, the scene is regenerated empty and the seller's real cutout is placed in it.
+5. **Cutout.** SAM 3.1 cuts the real product out of the photo for the white-background main image. Tap to add or remove parts.
+6. **Pack.** One zip with every image and the listing text. Generated scenes are labelled "AI-made scene".
+
 ## Meta models used
 
 | Step | Model |
@@ -29,8 +38,10 @@ Requires Node 22.9 or later and a [Meta Model API](https://dev.meta.ai/) key.
 npm install
 cp .env.example .env.local   # then add MODEL_API_KEY
 npm run smoke                # checks every model, costs about $0.02
-npm run dev
+npm run dev                  # http://localhost:3000
 ```
+
+One full run costs about $0.15–0.30 of Meta credit. Set `HUBOG_KILL=1` to pause every paid call and `SPEND_CAP_USD` to stop at a total. Each paid call also writes a `{"t":"spend",...}` line to the server log.
 
 ## License
 

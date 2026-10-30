@@ -1,8 +1,9 @@
-import { handle, imageUrl, int, text } from '@/lib/server/http';
+import { handle, rateLimit, imageUrl, int, text } from '@/lib/server/http';
 import { MetaError, segment } from '@/lib/server/meta';
 
 export async function POST(req: Request) {
   return handle(async () => {
+    rateLimit(req, 'segment', 90);
     const body = await req.json();
     const image = imageUrl(body.image, 'image');
     const width = int(body.width, 'width', 16, 4096);

@@ -13,6 +13,23 @@ export async function handle(fn: () => Promise<unknown>): Promise<Response> {
   }
 }
 
+// Per-visitor daily limits on the paid routes. The counts live in this instance's memory, so they reset
+// when it restarts and are not shared between instances: they stop a casual loop, not a determined one.
+// The spend cap in meta.ts is the backstop.
+const hits = new Map<string, { n: number; day: string }>();
+
+export function rateLimit(req: Request, bucket: string, max: number) {
+  if (process.env.NODE_ENV !== 'production') return;
+  const ip = req.headers.get('cf-connecting-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `${bucket}:${ip}`;
+  const seen = hits.get(key);
+  const n = seen && seen.day === day ? seen.n + 1 : 1;
+  if (hits.size > 5000) hits.clear();
+  hits.set(key, { n, day });
+  if (n > max) throw new MetaError(429, "You have used today's free shoots on this demo. Please come back tomorrow.");
+}
+
 export function imageUrl(value: unknown, name: string): string {
   if (typeof value !== 'string' || !/^data:image\/(jpeg|png|webp);base64,/.test(value) || value.length > MAX_IMAGE_CHARS) {
     throw new MetaError(400, `${name} must be a JPEG, PNG or WebP data URL under 4 MB.`);

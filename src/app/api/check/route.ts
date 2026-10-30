@@ -1,10 +1,11 @@
-import { handle, imageUrl, text } from '@/lib/server/http';
+import { handle, rateLimit, imageUrl, text } from '@/lib/server/http';
 import { sparkJson } from '@/lib/server/meta';
 import { CHECK_SYSTEM, VERDICT_SCHEMA, checkText } from '@/lib/server/prompts';
 import type { Product, Verdict } from '@/lib/types';
 
 export async function POST(req: Request) {
   return handle(async () => {
+    rateLimit(req, 'check', 70);
     const body = await req.json();
     const photo = imageUrl(body.photo, 'photo');
     const image = imageUrl(body.image, 'image');

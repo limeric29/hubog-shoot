@@ -1,10 +1,11 @@
-import { handle, imageUrl, text } from '@/lib/server/http';
+import { handle, rateLimit, imageUrl, text } from '@/lib/server/http';
 import { sparkJson } from '@/lib/server/meta';
 import { PLAN_SCHEMA, PLAN_SYSTEM, planText } from '@/lib/server/prompts';
 import type { Plan } from '@/lib/types';
 
 export async function POST(req: Request) {
   return handle(async () => {
+    rateLimit(req, 'plan', 12);
     const body = await req.json();
     const photo = imageUrl(body.photo, 'photo');
     const brief = text(body.brief, 'brief', 2000);

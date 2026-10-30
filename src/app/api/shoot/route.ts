@@ -1,4 +1,4 @@
-import { handle, imageUrl, text } from '@/lib/server/http';
+import { handle, rateLimit, imageUrl, text } from '@/lib/server/http';
 import { museImage } from '@/lib/server/meta';
 import { scenePrompt, shootPrompt } from '@/lib/server/prompts';
 import type { Aspect, Product, Shot } from '@/lib/types';
@@ -7,6 +7,7 @@ const ASPECTS: Aspect[] = ['1:1', '4:5', '9:16'];
 
 export async function POST(req: Request) {
   return handle(async () => {
+    rateLimit(req, 'shoot', 70);
     const body = await req.json();
     const empty = body.empty === true;
     const photo = empty ? undefined : imageUrl(body.photo, 'photo');
