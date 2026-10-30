@@ -85,9 +85,7 @@ function drawHeadline(ctx: CanvasRenderingContext2D, w: number, h: number, text:
   ctx.shadowBlur = 0;
 }
 
-/** Centre-crops a generated image to the shot's shape and draws the headline on it, if there is one. */
-export async function fitShot(url: string, aspect: Aspect, headline = ''): Promise<string> {
-  const img = await loadImage(url);
+function cropTo(img: HTMLImageElement, aspect: Aspect) {
   const r = RATIO[aspect];
   let sw = img.naturalWidth;
   let sh = img.naturalHeight;
@@ -95,6 +93,36 @@ export async function fitShot(url: string, aspect: Aspect, headline = ''): Promi
   else sh = Math.round(sw / r);
   const { c, ctx } = canvas(sw, sh);
   ctx.drawImage(img, Math.round((img.naturalWidth - sw) / 2), Math.round((img.naturalHeight - sh) / 2), sw, sh, 0, 0, sw, sh);
+  return { c, ctx, sw, sh };
+}
+
+/** Centre-crops a generated image to the shot's shape and draws the headline on it, if there is one. */
+export async function fitShot(url: string, aspect: Aspect, headline = ''): Promise<string> {
+  const { c, ctx, sw, sh } = cropTo(await loadImage(url), aspect);
+  if (headline) drawHeadline(ctx, sw, sh, headline);
+  return c.toDataURL('image/jpeg', 0.92);
+}
+
+/**
+ * The fallback for a scene that keeps changing the product: the seller's real cutout placed on an
+ * empty generated scene, with a contact shadow. `size` is the product's height as a share of the frame.
+ */
+export async function placeOnScene(sceneUrl: string, aspect: Aspect, cut: HTMLCanvasElement, headline: string, size: number): Promise<string> {
+  const { c, ctx, sw, sh } = cropTo(await loadImage(sceneUrl), aspect);
+  const k = Math.min((sh * size) / cut.height, (sw * 0.62) / cut.width);
+  const w = cut.width * k;
+  const h = cut.height * k;
+  const x = (sw - w) / 2;
+  const y = sh * 0.88 - h;
+  ctx.save();
+  ctx.filter = `blur(${Math.round(sw * 0.012)}px)`;
+  ctx.fillStyle = 'rgba(0,0,0,0.32)';
+  ctx.beginPath();
+  ctx.ellipse(sw / 2, y + h - h * 0.01, w * 0.5, Math.max(6, h * 0.035), 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(cut, x, y, w, h);
   if (headline) drawHeadline(ctx, sw, sh, headline);
   return c.toDataURL('image/jpeg', 0.92);
 }

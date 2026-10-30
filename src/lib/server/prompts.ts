@@ -23,7 +23,7 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['id', 'kind', 'title', 'platform', 'aspect', 'scene', 'headline', 'caption'],
+        required: ['id', 'kind', 'title', 'platform', 'aspect', 'scene', 'backdrop', 'headline', 'caption'],
         properties: {
           id: str,
           kind: { type: 'string', enum: ['main', 'lifestyle', 'detail', 'promo'] },
@@ -31,6 +31,7 @@ export const PLAN_SCHEMA = {
           platform: { type: 'string', enum: ['shopee', 'lazada', 'tiktok', 'facebook'] },
           aspect: { type: 'string', enum: ['1:1', '4:5', '9:16'] },
           scene: str,
+          backdrop: str,
           headline: str,
           caption: str,
         },
@@ -60,7 +61,7 @@ Shots: exactly five, in this order.
 4. kind "detail", platform "lazada", aspect "1:1", id "detail". A close, flattering view of the product's best feature.
 5. kind "promo", platform "tiktok", aspect "9:16", id "promo". A bold vertical creative with clear empty space at the top for a headline.
 
-For every shot: "scene" describes the surroundings, props, surface and light, and says nothing that would change the product itself. "headline" is a punchy line of at most four words that the app draws on top of the image, or empty if the shot should stay clean (the main image and the detail shot stay clean). "caption" is one short line to post with the image. "title" names the shot for the seller.
+For every shot: "scene" describes the surroundings, props, surface and light, and says nothing that would change the product itself. "backdrop" is the same setting, light and mood with the product and everything that could be mistaken for it removed: no bottles, packs or glasses of the product, no other copies. It ends by saying a flat empty surface is free in the lower centre of the frame. The app uses it only when it has to place the seller's real cutout into the scene, so write it as a complete scene of its own. For the main shot, leave backdrop empty. "headline" is a punchy line of at most four words that the app draws on top of the image, or empty if the shot should stay clean (the main image and the detail shot stay clean). "caption" is one short line to post with the image. "title" names the shot for the seller.
 
 Listing: a marketplace title under 90 characters that says what the product is, a description of two to four short sentences using only facts from the photo and the brief, and five to eight hashtags without the # sign.`;
 
@@ -96,6 +97,12 @@ export function checkText(product: Product, sellerWords: string) {
 }
 
 const FIDELITY = `The first image is the seller's real product. Show exactly this product in the new scene: the same shape, proportions, colours, materials and printed text or logo, with every letter on the label unchanged. Do not redesign it, add parts, or change its label. Photorealistic, natural, like a good phone-camera product shot. No watermark, no borders, and no added text or captions anywhere in the image.`;
+
+/** The scene alone, with room for the seller's real cutout to be placed in it afterwards. */
+export function scenePrompt(shot: Shot) {
+  const space = shot.headline ? ' Keep a clean area at the top for a headline.' : '';
+  return `A photorealistic photo of an empty scene: ${shot.backdrop || shot.scene}. Leave the product itself out, and anything that looks like it. Keep a clear, flat, empty surface in the lower centre of the frame with nothing standing on it, where an object can be placed afterwards. No people, no text, no watermark.${space} The frame is cropped slightly afterwards.`;
+}
 
 export function shootPrompt(product: Product, shot: Shot, problems: string[] = []) {
   const fix = problems.length

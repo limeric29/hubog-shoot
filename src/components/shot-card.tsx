@@ -10,8 +10,12 @@ export interface ShotState {
   image?: string;
   /** The generated image before cropping, kept so a new headline can be drawn without paying again. */
   raw?: string;
-  /** True when the pixels are the seller's own photo, not generated. */
+  /** True when the product's pixels are the seller's own photo, not generated. */
   real?: boolean;
+  /** True when the real cutout was placed on a generated scene because the scenes kept changing the product. */
+  composite?: boolean;
+  /** Tries the product check turned down, with what was wrong. */
+  rejected?: { image: string; note: string }[];
   verdict?: Verdict;
   error?: string;
 }
@@ -39,7 +43,7 @@ export function ShotCard({ shot, state, fileName, onRedo, onFix }: { shot: Shot;
           <div className={`grid h-full w-full place-items-center p-4 text-center text-sm text-[var(--muted)] ${busy ? 'animate-pulse' : ''}`}>{state.error ?? LABEL[state.status]}</div>
         )}
         {state.status === 'done' && (
-          <span className="absolute left-2 top-2 rounded-full bg-black/65 px-2 py-0.5 text-xs font-semibold text-white">{state.real ? 'Your real photo' : 'AI-made scene'}</span>
+          <span className="absolute left-2 top-2 rounded-full bg-black/65 px-2 py-0.5 text-xs font-semibold text-white">{state.composite ? 'Your real product, AI scene' : state.real ? 'Your real photo' : 'AI-made scene'}</span>
         )}
       </div>
       <div className="flex items-start justify-between gap-2">
@@ -54,6 +58,15 @@ export function ShotCard({ shot, state, fileName, onRedo, onFix }: { shot: Shot;
         </span>
       </div>
       {state.verdict?.seller_note && <p className="text-sm text-[var(--muted)]">{state.verdict.seller_note}</p>}
+      {state.rejected?.map((r, i) => (
+        <div key={i} className="flex items-center gap-2 rounded-lg bg-orange-50 p-2 text-xs text-orange-900">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={r.image} alt="Rejected try" className="h-12 w-12 shrink-0 rounded object-cover opacity-80" />
+          <span>
+            <strong>Rejected try {i + 1}.</strong> {r.note}
+          </span>
+        </div>
+      ))}
       {shot.caption && <p className="text-sm">{shot.caption}</p>}
       <div className="mt-auto flex flex-wrap gap-2">
         {state.status === 'done' && state.image && (

@@ -1,6 +1,6 @@
 import { handle, imageUrl, text } from '@/lib/server/http';
 import { museImage } from '@/lib/server/meta';
-import { shootPrompt } from '@/lib/server/prompts';
+import { scenePrompt, shootPrompt } from '@/lib/server/prompts';
 import type { Aspect, Product, Shot } from '@/lib/types';
 
 const ASPECTS: Aspect[] = ['1:1', '4:5', '9:16'];
@@ -8,7 +8,8 @@ const ASPECTS: Aspect[] = ['1:1', '4:5', '9:16'];
 export async function POST(req: Request) {
   return handle(async () => {
     const body = await req.json();
-    const photo = imageUrl(body.photo, 'photo');
+    const empty = body.empty === true;
+    const photo = empty ? undefined : imageUrl(body.photo, 'photo');
     const product: Product = {
       name: text(body.product?.name, 'product.name', 200),
       category: text(body.product?.category, 'product.category', 200),
@@ -21,10 +22,12 @@ export async function POST(req: Request) {
     const shot = {
       aspect,
       scene: text(body.shot?.scene, 'shot.scene', 1200),
+      backdrop: text(body.shot?.backdrop, 'shot.backdrop', 1200),
       headline: text(body.shot?.headline, 'shot.headline', 80),
     } as Shot;
     const problems = Array.isArray(body.problems) ? body.problems.slice(0, 6).map((p: unknown) => text(p, 'problem', 300)) : [];
-    const image = await museImage({ prompt: shootPrompt(product, shot, problems), photo, aspect });
+    const prompt = empty ? scenePrompt(shot) : shootPrompt(product, shot, problems);
+    const image = await museImage({ prompt, photo, aspect });
     return { image };
   });
 }

@@ -116,8 +116,8 @@ export async function sparkJson<T>(opts: {
   }
 }
 
-/** Muse Image through the Responses API, with the seller's photo as the reference. Returns a data URL. */
-export async function museImage(opts: { prompt: string; photo: string; aspect: Aspect; quality?: 'low' | 'high' }): Promise<string> {
+/** Muse Image through the Responses API, with the seller's photo as the reference when there is one. Returns a data URL. */
+export async function museImage(opts: { prompt: string; photo?: string; aspect: Aspect; quality?: 'low' | 'high' }): Promise<string> {
   guard();
   const res = await metaFetch('/responses', {
     method: 'POST',
@@ -131,7 +131,7 @@ export async function museImage(opts: { prompt: string; photo: string; aspect: A
           role: 'user',
           content: [
             { type: 'input_text', text: opts.prompt },
-            { type: 'input_image', image_url: opts.photo },
+            ...(opts.photo ? [{ type: 'input_image', image_url: opts.photo }] : []),
           ],
         },
       ],

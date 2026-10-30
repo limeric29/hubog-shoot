@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { api, transcribe } from '@/lib/client/api';
-import { cutout, fitShot, loadPhoto, onWhite, type Photo } from '@/lib/client/image';
+import { cutout, fitShot, loadPhoto, onWhite, placeOnScene, type Photo } from '@/lib/client/image';
 import { Recorder } from '@/lib/client/voice';
 import type { Mask, Plan, Shot, Verdict } from '@/lib/types';
 import { FixCutout } from './fix-cutout';
@@ -36,6 +36,8 @@ export function Studio() {
   const [answer, setAnswer] = useState('');
   const [updating, setUpdating] = useState(false);
   const recorder = useRef(new Recorder());
+  // The real cutout, ready once the main image is done. The fallback for a failed scene waits on it.
+  const cutReady = useRef<Promise<HTMLCanvasElement | null>>(Promise.resolve(null));
 
   const patch = (id: string, next: Partial<ShotState>) => setShots((all) => ({ ...all, [id]: { ...all[id], ...next } }));
 
@@ -68,8 +70,9 @@ export function Studio() {
   }
 
   /** Cuts the real product out of the photo and builds the white-background main image from it. */
-  async function applyMask(p: Photo, m: Mask) {
-    const url = onWhite(await cutout(p, m));
+  async function applyMask(p: Photo, m: Mask): Promise<HTMLCanvasElement> {
+    const cut = await cutout(p, m);
+    const url = onWhite(cut);
     setMask(m);
     patch('main', {
       status: 'done',
@@ -77,35 +80,55 @@ export function Studio() {
       real: true,
       verdict: { pass: true, problems: [], seller_note: 'This is your real product, cut out of your own photo.' },
     });
+    return cut;
   }
 
   async function makeMain(p: Photo, pl: Plan) {
     patch('main', { status: 'shooting' });
-    try {
-      const m = await api<Mask>('/api/segment', { image: p.url, width: p.width, height: p.height, phrase: pl.product.sam_phrase });
-      await applyMask(p, m);
-    } catch (err) {
-      patch('main', { status: 'failed', error: message(err) });
-    }
+    cutReady.current = (async () => {
+      try {
+        const m = await api<Mask>('/api/segment', { image: p.url, width: p.width, height: p.height, phrase: pl.product.sam_phrase });
+        return await applyMask(p, m);
+      } catch (err) {
+        patch('main', { status: 'failed', error: message(err) });
+        return null;
+      }
+    })();
+    await cutReady.current;
   }
 
   /** Shoots one scene, checks it against the real photo, and reshoots once if the product changed. */
   async function shootOne(p: Photo, pl: Plan, shot: Shot, sellerWords: string) {
     let problems: string[] = [];
+    const rejected: { image: string; note: string }[] = [];
+    patch(shot.id, { rejected: [], composite: false });
     try {
       for (let attempt = 1; attempt <= 2; attempt++) {
         patch(shot.id, { status: attempt === 1 ? 'shooting' : 'redoing', error: undefined });
         const { image } = await api<{ image: string }>('/api/shoot', { photo: p.url, product: pl.product, shot, problems });
         patch(shot.id, { status: 'checking' });
-        const verdict = await api<Verdict>('/api/check', { photo: p.url, image: await fitShot(image, shot.aspect), product: pl.product, language: sellerWords });
+        const fitted = await fitShot(image, shot.aspect);
+        const verdict = await api<Verdict>('/api/check', { photo: p.url, image: fitted, product: pl.product, language: sellerWords });
         if (verdict.pass) {
           patch(shot.id, { status: 'done', raw: image, image: await fitShot(image, shot.aspect, shot.headline), verdict, real: false });
           return;
         }
         problems = verdict.problems;
-        patch(shot.id, { verdict });
+        rejected.push({ image: fitted, note: verdict.seller_note });
+        patch(shot.id, { verdict, rejected: [...rejected] });
       }
-      patch(shot.id, { status: 'failed', image: undefined, error: 'This scene kept changing your product, so it was not used.' });
+      // Two tries changed the product. Keep the scene, drop the product, and place the real cutout in it.
+      patch(shot.id, { status: 'redoing', verdict: undefined });
+      const cut = await cutReady.current;
+      if (!cut) throw new Error('This scene kept changing your product, and the cutout is not ready to use instead.');
+      const { image: scene } = await api<{ image: string }>('/api/shoot', { empty: true, product: pl.product, shot });
+      patch(shot.id, {
+        status: 'done',
+        image: await placeOnScene(scene, shot.aspect, cut, shot.headline, shot.kind === 'detail' ? 0.75 : 0.5),
+        real: true,
+        composite: true,
+        verdict: { pass: true, problems: [], seller_note: 'The scene kept changing your product, so your real cutout was placed on it instead.' },
+      });
     } catch (err) {
       patch(shot.id, { status: 'failed', error: message(err) });
     }

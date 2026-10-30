@@ -22,6 +22,8 @@ export interface Shot {
   aspect: Aspect;
   /** English scene description for the image model. */
   scene: string;
+  /** The same setting with the product and anything that looks like it left out, for placing the real cutout in. */
+  backdrop: string;
   /** Short headline the app draws on the image, in the seller's language. Empty if none. */
   headline: string;
   /** Caption for this shot, in the seller's language. */
