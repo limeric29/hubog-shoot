@@ -15,10 +15,24 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const client = new OpenAI({ baseURL: 'https://api.meta.ai/v1', apiKey });
-const SPARK = process.env.MUSE_SPARK_MODEL ?? 'muse-spark-1.3';
+const MODELS = {
+  spark: process.env.MUSE_SPARK_MODEL ?? 'muse-spark-1.3',
+  image: process.env.MUSE_IMAGE_MODEL ?? 'muse-image-1.0',
+  sam: process.env.SAM_MODEL ?? 'sam-3.1',
+  voice: process.env.MUSE_VOICE_TRANSCRIBE_MODEL ?? 'muse-voice-transcribe-1.0',
+};
+const client = new OpenAI({ baseURL: (process.env.META_API_BASE_URL ?? 'https://api.meta.ai/v1').replace(/\/+$/, ''), apiKey });
 // Standard-mode list prices, USD: https://dev.meta.ai/docs/pricing-rate-limits
-const PRICE = { sparkIn: 1.25 / 1e6, sparkOut: 4.25 / 1e6, image: 0.01, sam: 2.5 / 1000 };
+const configuredPrice = (key, fallback) => {
+  const value = Number(process.env[key] ?? fallback);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+};
+const PRICE = {
+  sparkIn: configuredPrice('MUSE_SPARK_INPUT_USD_PER_MILLION', 1.25) / 1e6,
+  sparkOut: configuredPrice('MUSE_SPARK_OUTPUT_USD_PER_MILLION', 4.25) / 1e6,
+  image: configuredPrice('MUSE_IMAGE_USD_PER_IMAGE', 0.01),
+  sam: configuredPrice('SAM_USD_PER_IMAGE', 0.0025),
+};
 let spent = 0;
 
 async function step(name, fn) {
@@ -38,14 +52,14 @@ const results = [];
 results.push(await step('models enabled for this team', async () => {
   const list = await client.models.list();
   const ids = list.data.map((m) => m.id);
-  const missing = [SPARK, 'muse-image-1.0', 'sam-3.1', 'muse-voice-transcribe-1.0'].filter((id) => !ids.includes(id));
+  const missing = Object.values(MODELS).filter((id) => !ids.includes(id));
   if (missing.length) throw new Error(`missing: ${missing.join(', ')}`);
   return `${ids.length} models`;
 }));
 
-results.push(await step(`${SPARK} replies in Taglish`, async () => {
+results.push(await step(`${MODELS.spark} replies in Taglish`, async () => {
   const res = await client.chat.completions.create({
-    model: SPARK,
+    model: MODELS.spark,
     messages: [
       { role: 'developer', content: 'Reply in one short sentence, in the language the user writes in.' },
       { role: 'user', content: 'Nagbebenta ako ng homemade calamansi juice sa Davao. Anong magandang product photo?' },
@@ -58,9 +72,9 @@ results.push(await step(`${SPARK} replies in Taglish`, async () => {
 }));
 
 let imageDataUrl;
-results.push(await step('muse-image-1.0 generates a product shot', async () => {
+results.push(await step(`${MODELS.image} generates a product shot`, async () => {
   const res = await client.images.generate({
-    model: 'muse-image-1.0',
+    model: MODELS.image,
     prompt: 'Product photo: a glass bottle of homemade calamansi juice on a light wooden table, soft daylight, plain background',
     n: 1,
     size: '1024x1024',
@@ -76,9 +90,9 @@ results.push(await step('muse-image-1.0 generates a product shot', async () => {
 }));
 
 if (imageDataUrl) {
-  results.push(await step('sam-3.1 finds the bottle', async () => {
+  results.push(await step(`${MODELS.sam} finds the bottle`, async () => {
     const events = await client.responses.create({
-      model: 'sam-3.1',
+      model: MODELS.sam,
       input: [{
         type: 'message',
         role: 'user',

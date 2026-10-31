@@ -4,10 +4,21 @@ import OpenAI from 'openai';
 import { buildObjectPrompt, decodeMaskToRaster, parseImageStream, recordsOfKind } from '@meta-sam/parser';
 import type { Aspect, Mask } from '../types';
 
-const BASE_URL = 'https://api.meta.ai/v1';
+const baseUrl = () => (process.env.META_API_BASE_URL ?? 'https://api.meta.ai/v1').replace(/\/+$/, '');
+const model = (key: string, fallback: string) => process.env[key] ?? fallback;
+const price = (key: string, fallback: number) => {
+  const value = Number(process.env[key] ?? fallback);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+};
 
 // Standard-mode list prices, USD: https://dev.meta.ai/docs/pricing-rate-limits
-const PRICE = { sparkIn: 1.25 / 1e6, sparkOut: 4.25 / 1e6, image: 0.01, sam: 2.5 / 1000, asrHour: 0.18 };
+const PRICE = {
+  sparkIn: price('MUSE_SPARK_INPUT_USD_PER_MILLION', 1.25) / 1e6,
+  sparkOut: price('MUSE_SPARK_OUTPUT_USD_PER_MILLION', 4.25) / 1e6,
+  image: price('MUSE_IMAGE_USD_PER_IMAGE', 0.01),
+  sam: price('SAM_USD_PER_IMAGE', 0.0025),
+  asrHour: price('MUSE_VOICE_USD_PER_HOUR', 0.18),
+};
 
 // Muse Image accepts only 1:1, 2:3 and 3:2 sizes (anything else is a 400), so 4:5 and 9:16 shots are
 // generated at 2:3 and cropped to shape in the browser.
@@ -50,12 +61,12 @@ function apiKey() {
 }
 
 function client() {
-  return new OpenAI({ baseURL: BASE_URL, apiKey: apiKey(), maxRetries: 2 });
+  return new OpenAI({ baseURL: baseUrl(), apiKey: apiKey(), maxRetries: 2 });
 }
 
 async function metaFetch(path: string, init: RequestInit, tries = 3): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const res = await fetch(`${baseUrl()}${path}`, {
       ...init,
       headers: { Authorization: `Bearer ${apiKey()}`, ...init.headers },
     });
@@ -83,12 +94,12 @@ export async function sparkJson<T>(opts: {
   maxTokens?: number;
 }): Promise<T> {
   guard();
-  const model = process.env.MUSE_SPARK_MODEL ?? 'muse-spark-1.3';
+  const modelId = model('MUSE_SPARK_MODEL', 'muse-spark-1.3');
   const res = await metaFetch('/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model,
+      model: modelId,
       messages: [
         { role: 'developer', content: opts.system },
         {
@@ -106,7 +117,7 @@ export async function sparkJson<T>(opts: {
   });
   const json = await res.json();
   const u = json.usage ?? {};
-  book(model, (u.prompt_tokens ?? 0) * PRICE.sparkIn + (u.completion_tokens ?? 0) * PRICE.sparkOut, `${u.prompt_tokens ?? 0} in / ${u.completion_tokens ?? 0} out`);
+  book(modelId, (u.prompt_tokens ?? 0) * PRICE.sparkIn + (u.completion_tokens ?? 0) * PRICE.sparkOut, `${u.prompt_tokens ?? 0} in / ${u.completion_tokens ?? 0} out`);
   const content = json.choices?.[0]?.message?.content;
   if (!content) throw new MetaError(502, 'Muse Spark returned no content.');
   try {
@@ -119,11 +130,12 @@ export async function sparkJson<T>(opts: {
 /** Muse Image through the Responses API, with the seller's photo as the reference when there is one. Returns a data URL. */
 export async function museImage(opts: { prompt: string; photo?: string; aspect: Aspect; quality?: 'low' | 'high' }): Promise<string> {
   guard();
+  const modelId = model('MUSE_IMAGE_MODEL', 'muse-image-1.0');
   const res = await metaFetch('/responses', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'muse-image-1.0',
+      model: modelId,
       // Seller photos are not kept on Meta's side.
       store: false,
       input: [
@@ -152,7 +164,7 @@ export async function museImage(opts: { prompt: string; photo?: string; aspect: 
   const json = await res.json();
   const call = json.output?.find((o: { type: string }) => o.type === 'image_generation_call');
   if (!call?.result) throw new MetaError(502, 'Muse Image returned no image.');
-  book('muse-image-1.0', PRICE.image, '1 image');
+  book(modelId, PRICE.image, '1 image');
   return `data:image/jpeg;base64,${call.result}`;
 }
 
@@ -180,8 +192,9 @@ export async function segment(opts: {
         ],
       })
     : (opts.phrase ?? 'product');
+  const modelId = model('SAM_MODEL', 'sam-3.1');
   const events = await client().responses.create({
-    model: 'sam-3.1',
+    model: modelId,
     input: [
       {
         type: 'message',
@@ -195,7 +208,7 @@ export async function segment(opts: {
     stream: true,
   });
   const result = await parseImageStream(events as never).finalResult;
-  book('sam-3.1', PRICE.sam, '1 image');
+  book(modelId, PRICE.sam, '1 image');
 
   let best: Mask | undefined;
   for (const rec of recordsOfKind(result.records, 'mask')) {
@@ -226,14 +239,15 @@ export async function segment(opts: {
 /** Muse Voice Transcribe on one complete WAV recording. */
 export async function transcribeWav(wav: ArrayBuffer): Promise<string> {
   guard();
+  const modelId = model('MUSE_VOICE_TRANSCRIBE_MODEL', 'muse-voice-transcribe-1.0');
   const form = new FormData();
   form.append(
     'request',
-    new Blob([JSON.stringify({ model: 'muse-voice-transcribe-1.0', audioEncoding: 'WAV', mode: 'PUSH_TO_TALK' })], { type: 'application/json' }),
+    new Blob([JSON.stringify({ model: modelId, audioEncoding: 'WAV', mode: 'PUSH_TO_TALK' })], { type: 'application/json' }),
   );
   form.append('audio', new Blob([wav], { type: 'audio/wav' }), 'brief.wav');
   const res = await metaFetch('/asr/transcribe', { method: 'POST', headers: { Accept: 'application/json' }, body: form });
   const json = await res.json();
-  book('muse-voice-transcribe-1.0', ((json.audioDurationMs ?? 0) / 3_600_000) * PRICE.asrHour, `${json.audioDurationMs ?? 0} ms`);
+  book(modelId, ((json.audioDurationMs ?? 0) / 3_600_000) * PRICE.asrHour, `${json.audioDurationMs ?? 0} ms`);
   return String(json.transcript ?? '').trim();
 }
