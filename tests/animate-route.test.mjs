@@ -11,7 +11,7 @@ const photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcS
 
 // Load the actual animate handlers with a scripted Modal endpoint, so these
 // regressions make no network calls.
-function handlers(modal, env, turnstileStub, sparkResult = { motion: 'Steam curls upward while leaves tremble at the frame edges.', camera: 'drift' }) {
+function handlers(modal, env, turnstileStub, sparkResult = { motion: 'Steam curls upward while leaves tremble at the frame edges.', camera: 'drift' }, openConfigured = true) {
   const seen = [];
   const sparkCalls = [];
   const cache = new Map();
@@ -21,10 +21,13 @@ function handlers(modal, env, turnstileStub, sparkResult = { motion: 'Steam curl
       constructor(status, message) { super(message); this.status = status; }
     },
     sparkJson: async (options) => {
+      const attempt = sparkCalls.length;
       sparkCalls.push(options);
-      if (sparkResult instanceof Error) throw sparkResult;
-      return sparkResult;
+      const r = Array.isArray(sparkResult) ? sparkResult[attempt] : sparkResult;
+      if (r instanceof Error) throw r;
+      return r;
     },
+    sparkOpenConfigured: () => openConfigured,
   };
   function load(file) {
     if (file === path.join(root, 'src/lib/server/meta.ts')) return metaStub;
@@ -104,6 +107,24 @@ test('a failed direction falls back to the template prompt', async () => {
   assert.match(seen[0].body.prompt, /Move the surroundings gently/);
   assert.match(seen[0].body.prompt, /Calamansi Juice/);
   assert.equal(seen[0].body.camera, 'slow_push_in');
+});
+
+test('direction tries open weights first, then 1.3', async () => {
+  const { start, seen, sparkCalls } = handlers(() => json({ call_id: 'fc-x' }), {}, undefined,
+    [new Error('open down'), { motion: 'Fallback motion here.', camera: 'static' }]);
+  const res = await start(post(body));
+  assert.equal(res.status, 200);
+  assert.deepEqual(sparkCalls.map((c) => c.open), [true, false]);
+  assert.equal(seen[0].body.prompt, 'Fallback motion here.');
+  assert.equal(seen[0].body.camera, 'static');
+});
+
+test('direction skips open weights when unconfigured', async () => {
+  const { start, sparkCalls } = handlers(() => json({ call_id: 'fc-x' }), {}, undefined,
+    { motion: 'Direct motion.', camera: 'drift' }, false);
+  const res = await start(post(body));
+  assert.equal(res.status, 200);
+  assert.deepEqual(sparkCalls.map((c) => c.open), [false]);
 });
 
 test('an unsupported aspect is rejected before any Modal call', async () => {

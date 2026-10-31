@@ -45,7 +45,7 @@ npm run dev                  # http://localhost:3000
 
 Model IDs are read from server environment variables. The defaults are `muse-spark-1.3`, `muse-image-1.0`, `sam-3.1`, and `muse-voice-transcribe-1.0`; change `MUSE_SPARK_MODEL`, `MUSE_IMAGE_MODEL`, `SAM_MODEL`, or `MUSE_VOICE_TRANSCRIBE_MODEL` in `.env.local` or `wrangler.jsonc`. `META_API_BASE_URL` can point to another compatible endpoint. If the selected models have different rates, update the `*_USD_*` pricing variables too so the spend log and cap stay accurate.
 
-Muse Spark (shot planning and photo checks) can run on a separate endpoint: set `MUSE_SPARK_BASE_URL` (e.g. `https://inference.baseten.co/v1` for Baseten's `meta-models/muse-spark-open-1026`) and `MUSE_SPARK_API_KEY`. Spark usage is then billed to that endpoint, not Meta, so it doesn't count toward `SPEND_CAP_USD`. Production runs everything on the Meta Model API.
+Muse Spark (shot planning and photo checks) can run on a separate endpoint: set `MUSE_SPARK_BASE_URL` and `MUSE_SPARK_API_KEY`. Spark usage is then billed to that endpoint, not Meta, so it doesn't count toward `SPEND_CAP_USD`. Single calls can also go to an open-weights endpoint: `MUSE_SPARK_OPEN_BASE_URL`/`MUSE_SPARK_OPEN_MODEL` (same key). Production plans and checks on Meta's `muse-spark-1.3` and directs animations with Baseten's `meta-models/muse-spark-open-1026`, falling back to 1.3 when the open call has issues.
 
 Turnstile is off during development and on in production. Set `TURNSTILE_ENABLED=false` locally to disable it; the production Worker config enables it for `shoot.hubog.app`.
 
@@ -60,7 +60,7 @@ npm run cf:build
 npx wrangler deploy --secrets-file <file containing MODEL_API_KEY=...>   # first deploy only; delete the file after
 npx wrangler secret put MODEL_API_KEY                                    # later changes to the key
 npx wrangler secret put TURNSTILE_SECRET
-# npx wrangler secret put MUSE_SPARK_API_KEY                             # only if Spark is routed away (see above)
+npx wrangler secret put MUSE_SPARK_API_KEY                               # Baseten key for Spark Open direction
 npm run cf:deploy                                                        # later deploys
 ```
 

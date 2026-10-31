@@ -1,7 +1,8 @@
 // Server-side model clients. Never import this from client code: it reads API keys.
-// Spark calls (plan + check) can be routed to a separate OpenAI-compatible endpoint
-// such as Baseten's Muse Spark Open via MUSE_SPARK_BASE_URL/MUSE_SPARK_API_KEY;
-// image, segmentation, and transcription always use the Meta Model API.
+// Spark calls can be routed to a separate OpenAI-compatible endpoint: all of
+// them via MUSE_SPARK_BASE_URL/MUSE_SPARK_API_KEY, or single calls (animation
+// direction) to an open-weights endpoint via MUSE_SPARK_OPEN_BASE_URL; image,
+// segmentation, and transcription always use the Meta Model API.
 import OpenAI from 'openai';
 import { buildObjectPrompt, decodeMaskToRaster, parseImageStream, recordsOfKind } from '@meta-sam/parser';
 import type { Aspect, Mask } from '../types';
@@ -10,6 +11,10 @@ const baseUrl = () => (process.env.META_API_BASE_URL ?? 'https://api.meta.ai/v1'
 const model = (key: string, fallback: string) => process.env[key] ?? fallback;
 const sparkBaseUrl = () => (process.env.MUSE_SPARK_BASE_URL ?? '').trim().replace(/\/+$/, '') || baseUrl();
 const sparkApiKey = () => process.env.MUSE_SPARK_API_KEY ?? apiKey();
+const openBaseUrl = () => (process.env.MUSE_SPARK_OPEN_BASE_URL ?? '').trim().replace(/\/+$/, '');
+const openModel = () => process.env.MUSE_SPARK_OPEN_MODEL ?? 'meta-models/muse-spark-open-1026';
+/** True when single calls can be routed to the open-weights endpoint. */
+export const sparkOpenConfigured = () => openBaseUrl().length > 0;
 // A separate Spark endpoint is billed separately: Spark usage booked at $0 keeps the
 // Meta SPEND_CAP_USD guard measuring Meta spend only.
 const sparkRoutedAway = () => (process.env.MUSE_SPARK_BASE_URL ?? '').trim().length > 0;
@@ -112,7 +117,10 @@ export function parseJsonLoose(content: string): { ok: boolean; value?: unknown 
   return { ok: false };
 }
 
-/** Muse Spark with optional images, answering as JSON that matches `schema`. */
+/** Muse Spark with optional images, answering as JSON that matches `schema`.
+ * With `open`, this one call goes to the open-weights endpoint instead (the
+ * animation director); when that endpoint is not configured it falls back to
+ * the normal Spark routing. */
 export async function sparkJson<T>(opts: {
   system: string;
   text: string;
@@ -120,10 +128,15 @@ export async function sparkJson<T>(opts: {
   name: string;
   schema: object;
   maxTokens?: number;
+  open?: boolean;
 }): Promise<T> {
   guard();
-  const modelId = model('MUSE_SPARK_MODEL', 'muse-spark-1.3');
-  const away = sparkRoutedAway();
+  const viaOpen = opts.open === true && openBaseUrl().length > 0;
+  const modelId = viaOpen ? openModel() : model('MUSE_SPARK_MODEL', 'muse-spark-1.3');
+  const away = viaOpen || sparkRoutedAway();
+  const target = !away ? undefined : viaOpen
+    ? { base: openBaseUrl(), key: sparkApiKey(), label: 'Spark Open' }
+    : { base: sparkBaseUrl(), key: sparkApiKey(), label: 'Spark API' };
   for (let attempt = 1; ; attempt++) {
     const res = await metaFetch('/chat/completions', {
       method: 'POST',
@@ -149,7 +162,7 @@ export async function sparkJson<T>(opts: {
         // endpoints think at length before answering, so they get more headroom.
         max_completion_tokens: opts.maxTokens ?? (away ? 16000 : 6000),
       }),
-    }, 3, away ? { base: sparkBaseUrl(), key: sparkApiKey(), label: 'Spark API' } : undefined);
+    }, 3, target);
     const json = await res.json();
     const u = json.usage ?? {};
     book(modelId, away ? 0 : (u.prompt_tokens ?? 0) * PRICE.sparkIn + (u.completion_tokens ?? 0) * PRICE.sparkOut, `${u.prompt_tokens ?? 0} in / ${u.completion_tokens ?? 0} out`);

@@ -52,3 +52,4 @@ next-env.d.ts
 .wrangler/
 .dev.vars
 .animate-key
+__pycache__/
