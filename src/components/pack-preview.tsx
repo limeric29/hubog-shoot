@@ -18,7 +18,7 @@ export function PackPreview() {
               <figcaption>Lifestyle photo</figcaption>
             </figure>
             <figure className={styles.mainExample}>
-              <img src="/examples/main.jpg" alt="The sample calamansi bottle cut out on a white background" width="900" height="900" />
+              <img src="/examples/main.jpg" alt="The sample calamansi bottle cut out on a white background" width="900" height="1000" />
               <figcaption>Main photo</figcaption>
             </figure>
             <figure className={styles.promoExample}>
