@@ -1,11 +1,18 @@
-// Server-side client for the Meta Model API. Never import this from client code:
-// it reads MODEL_API_KEY.
+// Server-side model clients. Never import this from client code: it reads API keys.
+// Spark calls (plan + check) can be routed to a separate OpenAI-compatible endpoint
+// such as Baseten's Muse Spark Open via MUSE_SPARK_BASE_URL/MUSE_SPARK_API_KEY;
+// image, segmentation, and transcription always use the Meta Model API.
 import OpenAI from 'openai';
 import { buildObjectPrompt, decodeMaskToRaster, parseImageStream, recordsOfKind } from '@meta-sam/parser';
 import type { Aspect, Mask } from '../types';
 
 const baseUrl = () => (process.env.META_API_BASE_URL ?? 'https://api.meta.ai/v1').replace(/\/+$/, '');
 const model = (key: string, fallback: string) => process.env[key] ?? fallback;
+const sparkBaseUrl = () => (process.env.MUSE_SPARK_BASE_URL ?? '').trim().replace(/\/+$/, '') || baseUrl();
+const sparkApiKey = () => process.env.MUSE_SPARK_API_KEY ?? apiKey();
+// A separate Spark endpoint is billed separately: Spark usage booked at $0 keeps the
+// Meta SPEND_CAP_USD guard measuring Meta spend only.
+const sparkRoutedAway = () => (process.env.MUSE_SPARK_BASE_URL ?? '').trim().length > 0;
 const price = (key: string, fallback: number) => {
   const value = Number(process.env[key] ?? fallback);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -64,11 +71,14 @@ function client() {
   return new OpenAI({ baseURL: baseUrl(), apiKey: apiKey(), maxRetries: 2 });
 }
 
-async function metaFetch(path: string, init: RequestInit, tries = 3): Promise<Response> {
+async function metaFetch(path: string, init: RequestInit, tries = 3, target?: { base: string; key: string; label: string }): Promise<Response> {
+  const base = target?.base ?? baseUrl();
+  const key = target?.key ?? apiKey();
+  const label = target?.label ?? 'Meta API';
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch(`${baseUrl()}${path}`, {
+    const res = await fetch(`${base}${path}`, {
       ...init,
-      headers: { Authorization: `Bearer ${apiKey()}`, ...init.headers },
+      headers: { Authorization: `Bearer ${key}`, ...init.headers },
     });
     if (res.ok) return res;
     if ((res.status === 429 || res.status >= 500) && attempt < tries) {
@@ -80,8 +90,23 @@ async function metaFetch(path: string, init: RequestInit, tries = 3): Promise<Re
     try {
       message = JSON.parse(text)?.error?.message ?? message;
     } catch {}
-    throw new MetaError(res.status, `Meta API ${path} ${res.status}: ${message}`);
+    throw new MetaError(res.status, `${label} ${path} ${res.status}: ${message}`);
   }
+}
+
+// Direct parse first; fall back to fenced blocks for endpoints that accept a JSON
+// schema without enforcing it. Only inputs that failed before take the fallback.
+function parseJsonLoose(content: string): { ok: boolean; value?: unknown } {
+  try {
+    return { ok: true, value: JSON.parse(content) };
+  } catch {}
+  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) {
+    try {
+      return { ok: true, value: JSON.parse(fenced[1]) };
+    } catch {}
+  }
+  return { ok: false };
 }
 
 /** Muse Spark with optional images, answering as JSON that matches `schema`. */
@@ -95,13 +120,18 @@ export async function sparkJson<T>(opts: {
 }): Promise<T> {
   guard();
   const modelId = model('MUSE_SPARK_MODEL', 'muse-spark-1.3');
+  const away = sparkRoutedAway();
   const res = await metaFetch('/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: modelId,
       messages: [
-        { role: 'developer', content: opts.system },
+        {
+          role: 'developer',
+          // Some OpenAI-compatible endpoints accept a JSON schema without enforcing it.
+          content: away ? `${opts.system}\n\nRespond with a single JSON object matching the requested schema, and nothing else. No code fences, no commentary.` : opts.system,
+        },
         {
           role: 'user',
           content: [
@@ -111,20 +141,19 @@ export async function sparkJson<T>(opts: {
         },
       ],
       response_format: { type: 'json_schema', json_schema: { name: opts.name, strict: true, schema: opts.schema } },
-      // Reasoning tokens count against this, so leave room for them.
-      max_completion_tokens: opts.maxTokens ?? 6000,
+      // Reasoning tokens count against this, so leave room for them. Reasoning
+      // endpoints think at length before answering, so they get more headroom.
+      max_completion_tokens: opts.maxTokens ?? (away ? 16000 : 6000),
     }),
-  });
+  }, 3, away ? { base: sparkBaseUrl(), key: sparkApiKey(), label: 'Spark API' } : undefined);
   const json = await res.json();
   const u = json.usage ?? {};
-  book(modelId, (u.prompt_tokens ?? 0) * PRICE.sparkIn + (u.completion_tokens ?? 0) * PRICE.sparkOut, `${u.prompt_tokens ?? 0} in / ${u.completion_tokens ?? 0} out`);
+  book(modelId, away ? 0 : (u.prompt_tokens ?? 0) * PRICE.sparkIn + (u.completion_tokens ?? 0) * PRICE.sparkOut, `${u.prompt_tokens ?? 0} in / ${u.completion_tokens ?? 0} out`);
   const content = json.choices?.[0]?.message?.content;
   if (!content) throw new MetaError(502, 'Muse Spark returned no content.');
-  try {
-    return JSON.parse(content) as T;
-  } catch {
-    throw new MetaError(502, 'Muse Spark returned JSON that does not parse.');
-  }
+  const parsed = parseJsonLoose(content);
+  if (!parsed.ok) throw new MetaError(502, 'Muse Spark returned JSON that does not parse.');
+  return parsed.value as T;
 }
 
 /** Muse Image through the Responses API, with the seller's photo as the reference when there is one. Returns a data URL. */

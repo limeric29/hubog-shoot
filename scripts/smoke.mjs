@@ -1,6 +1,7 @@
-// Checks that the Meta Model API key works for every model Hubog Shoot needs.
-// Costs about $0.02 per run: one Muse Image generation ($0.01), one SAM 3.1
-// segmentation ($0.0025) and a few hundred Muse Spark tokens.
+// Checks that the model keys work for every model Hubog Shoot needs.
+// Costs about $0.02 of Meta credit per run: one Muse Image generation ($0.01),
+// one SAM 3.1 segmentation ($0.0025) and, unless Spark is routed to a separate
+// endpoint, a few hundred Muse Spark tokens.
 //
 //   MODEL_API_KEY=... npm run smoke
 //
@@ -22,6 +23,12 @@ const MODELS = {
   voice: process.env.MUSE_VOICE_TRANSCRIBE_MODEL ?? 'muse-voice-transcribe-1.0',
 };
 const client = new OpenAI({ baseURL: (process.env.META_API_BASE_URL ?? 'https://api.meta.ai/v1').replace(/\/+$/, ''), apiKey });
+// Spark calls can be routed to a separately billed endpoint (e.g. Baseten's Muse
+// Spark Open); the rest always use the Meta client above.
+const sparkAway = (process.env.MUSE_SPARK_BASE_URL ?? '').trim().length > 0;
+const sparkClient = sparkAway
+  ? new OpenAI({ baseURL: process.env.MUSE_SPARK_BASE_URL.trim().replace(/\/+$/, ''), apiKey: process.env.MUSE_SPARK_API_KEY ?? apiKey })
+  : client;
 // Standard-mode list prices, USD: https://dev.meta.ai/docs/pricing-rate-limits
 const configuredPrice = (key, fallback) => {
   const value = Number(process.env[key] ?? fallback);
@@ -52,13 +59,15 @@ const results = [];
 results.push(await step('models enabled for this team', async () => {
   const list = await client.models.list();
   const ids = list.data.map((m) => m.id);
-  const missing = Object.values(MODELS).filter((id) => !ids.includes(id));
+  // A routed-away Spark model lives on another endpoint; the reply step below proves it.
+  const wanted = sparkAway ? [MODELS.image, MODELS.sam, MODELS.voice] : Object.values(MODELS);
+  const missing = wanted.filter((id) => !ids.includes(id));
   if (missing.length) throw new Error(`missing: ${missing.join(', ')}`);
   return `${ids.length} models`;
 }));
 
 results.push(await step(`${MODELS.spark} replies in Taglish`, async () => {
-  const res = await client.chat.completions.create({
+  const res = await sparkClient.chat.completions.create({
     model: MODELS.spark,
     messages: [
       { role: 'developer', content: 'Reply in one short sentence, in the language the user writes in.' },
@@ -67,7 +76,7 @@ results.push(await step(`${MODELS.spark} replies in Taglish`, async () => {
     max_completion_tokens: 400,
   });
   const u = res.usage ?? {};
-  spent += (u.prompt_tokens ?? 0) * PRICE.sparkIn + (u.completion_tokens ?? 0) * PRICE.sparkOut;
+  if (!sparkAway) spent += (u.prompt_tokens ?? 0) * PRICE.sparkIn + (u.completion_tokens ?? 0) * PRICE.sparkOut;
   return JSON.stringify(res.choices[0]?.message?.content ?? '');
 }));
 

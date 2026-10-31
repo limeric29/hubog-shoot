@@ -1,6 +1,6 @@
 // Hubog Shoot on Cloudflare Workers, through the OpenNext adapter (`npm run cf:build` builds .open-next/).
 // Vars and secrets reach the app as process.env.
-// Secrets (never here): MODEL_API_KEY, TURNSTILE_SECRET.
+// Secrets (never here): MODEL_API_KEY, MUSE_SPARK_API_KEY, TURNSTILE_SECRET.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "hubog-shoot",
@@ -17,7 +17,8 @@
     // Stops every paid call once this instance has spent this much (USD). Set HUBOG_KILL to "1" to pause them all.
     "SPEND_CAP_USD": "40",
     "META_API_BASE_URL": "https://api.meta.ai/v1",
-    "MUSE_SPARK_MODEL": "muse-spark-1.3",
+    "MUSE_SPARK_MODEL": "meta-models/muse-spark-open-1026",
+    "MUSE_SPARK_BASE_URL": "https://inference.baseten.co/v1",
     "MUSE_IMAGE_MODEL": "muse-image-1.0",
     "SAM_MODEL": "sam-3.1",
     "MUSE_VOICE_TRANSCRIBE_MODEL": "muse-voice-transcribe-1.0",
@@ -30,5 +31,5 @@
     "TURNSTILE_SITEKEY": "0x4AAAAAAFtTm2cPGOof09MP",
     "TURNSTILE_HOSTNAMES": "shoot.hubog.app"
   },
-  "secrets": { "required": ["MODEL_API_KEY", "TURNSTILE_SECRET"] }
+  "secrets": { "required": ["MODEL_API_KEY", "MUSE_SPARK_API_KEY", "TURNSTILE_SECRET"] }
 }
