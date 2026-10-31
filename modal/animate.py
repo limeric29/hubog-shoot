@@ -140,8 +140,12 @@ def cover_fit(raw: bytes, width: int, height: int) -> str:
     volumes={WEIGHTS_DIR: volume},
     cpu=16.0,
     timeout=900,
-    scaledown_window=60,
+    # Cost-first scaling: nothing warm when idle, one GPU job at a time, and
+    # the container exits 5 s after each job. Every animation pays a cold
+    # start (~1 min to restore and warm up) instead of idle GPU time.
+    min_containers=0,
     max_containers=1,
+    scaledown_window=5,
     enable_memory_snapshot=True,
 )
 class Animator:

@@ -22,13 +22,12 @@ type Turnstile = {
   render: (container: HTMLElement, options: {
     sitekey: string;
     action: string;
-    size?: 'normal' | 'flexible' | 'compact' | 'invisible';
+    size?: 'normal' | 'flexible' | 'compact';
     callback: (token: string) => void;
     'expired-callback'?: () => void;
     'error-callback'?: () => void;
   }) => TurnstileId;
   reset: (id: TurnstileId) => void;
-  execute: (id: TurnstileId) => void;
   remove?: (id: TurnstileId) => void;
 };
 
@@ -60,6 +59,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   const [plan, setPlan] = useState<Plan | null>(null);
   const [shots, setShots] = useState<Record<string, ShotState>>({});
   const [anims, setAnims] = useState<Record<string, AnimationState>>({});
+  const [animateAsk, setAnimateAsk] = useState<Shot | null>(null);
   const [mask, setMask] = useState<Mask | null>(null);
   const [fixing, setFixing] = useState(false);
   const [answer, setAnswer] = useState('');
@@ -75,6 +75,10 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   const [activeShootId, setActiveShootId] = useState('');
   const turnstileContainer = useRef<HTMLDivElement>(null);
   const turnstileId = useRef<TurnstileId | null>(null);
+  const animateContainer = useRef<HTMLDivElement>(null);
+  const animateWidgetId = useRef<TurnstileId | null>(null);
+  const animatePanel = useRef<HTMLDivElement>(null);
+  const planRef = useRef<Plan | null>(null);
   const shootCreatedAt = useRef(0);
   const recorder = useRef(new Recorder());
   // The real cutout, ready once the main image is done. The fallback for a failed scene waits on it.
@@ -174,49 +178,46 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     };
   }, [showTurnstile, stage, hasPlanQuestion, turnstileReady, turnstileSiteKey]);
 
+  // One visible Turnstile solve per animation: each GPU video costs a fresh
+  // human verification, so a stockpiled session can't mint videos in a loop.
+  // Solving starts that scene's animation; closing the panel cancels it.
+  useEffect(() => {
+    if (!animateAsk || !turnstileEnabled || !turnstileSiteKey || !turnstileReady || !animateContainer.current || !window.turnstile) return;
+    const shot = animateAsk;
+    animatePanel.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    animateWidgetId.current = window.turnstile.render(animateContainer.current, {
+      sitekey: turnstileSiteKey,
+      action: 'animate',
+      size: 'compact',
+      callback: (token) => {
+        setAnimateAsk(null);
+        if (planRef.current) void animateOne(planRef.current, shot, token);
+      },
+      'expired-callback': () => {
+        setAnimateAsk(null);
+        patchAnim(shot.id, { status: 'failed', error: 'Verification expired. Please try again.' });
+      },
+      'error-callback': () => {
+        setAnimateAsk(null);
+        patchAnim(shot.id, { status: 'failed', error: 'Verification could not load. Refresh the page and try again.' });
+      },
+    });
+    return () => {
+      if (animateWidgetId.current !== null) window.turnstile?.remove?.(animateWidgetId.current);
+      animateWidgetId.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animateAsk, turnstileEnabled, turnstileReady, turnstileSiteKey]);
+
   const patch = (id: string, next: Partial<ShotState>) => setShots((all) => ({ ...all, [id]: { ...all[id], ...next } }));
   const patchAnim = (id: string, next: AnimationState) => setAnims((all) => ({ ...all, [id]: next }));
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  // One invisible Turnstile solve per animation: each GPU video costs a fresh
-  // human verification, so a stockpiled session can't mint videos in a loop.
-  function solveAnimateChallenge(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const t = window.turnstile;
-      if (!t || !turnstileSiteKey) {
-        reject(new Error('Verification could not load. Refresh the page and try again.'));
-        return;
-      }
-      const el = document.createElement('div');
-      document.body.appendChild(el);
-      let settled = false;
-      const done = (fn: () => void) => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timer);
-        try { t.remove?.(id); } catch { /* already gone */ }
-        el.remove();
-        fn();
-      };
-      const timer = window.setTimeout(() => done(() => reject(new Error('Verification timed out. Please try again.'))), 120_000);
-      const id = t.render(el, {
-        sitekey: turnstileSiteKey,
-        action: 'animate',
-        size: 'invisible',
-        callback: (token) => done(() => resolve(token)),
-        'expired-callback': () => done(() => reject(new Error('Verification expired. Please try again.'))),
-        'error-callback': () => done(() => reject(new Error('Verification could not load. Refresh the page and try again.'))),
-      });
-      t.execute(id);
-    });
-  }
-
-  async function animateOne(pl: Plan, shot: Shot) {
+  async function animateOne(pl: Plan, shot: Shot, turnstileToken?: string) {
     const image = shots[shot.id]?.image;
     if (!image || anims[shot.id]?.status === 'working') return;
     patchAnim(shot.id, { status: 'working' });
     try {
-      const turnstileToken = turnstileEnabled ? await solveAnimateChallenge() : undefined;
       const { call_id } = await api<{ call_id: string }>('/api/animate', {
         image,
         product: { name: pl.product.name, label_text: pl.product.label_text },
@@ -640,6 +641,14 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
               </div>
             </section>
 
+            {animateAsk && (
+              <div ref={animatePanel} className={styles.animateVerify} role="group" aria-label="Verify to animate">
+                <p>One quick check to animate <strong>{animateAsk.title}</strong> — each video uses paid GPU time.</p>
+                {turnstileSiteKey ? <div ref={animateContainer} className={styles.turnstileWidget} /> : <p role="status">Photo verification is not available right now.</p>}
+                <button type="button" onClick={() => setAnimateAsk(null)} className={styles.animateCancel}>Cancel</button>
+              </div>
+            )}
+
             <div className={styles.resultsLayout}>
               <section className={styles.gallery} aria-label="Your photos">
                 <div className={styles.sectionHeading}><h2>Your photos</h2><span role="status">{readyCount} of {plan.shots.length} ready</span></div>
@@ -671,7 +680,11 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                       state={shots[shot.id] ?? { status: 'queued' }}
                       fileName={slug(plan.product.name)}
                       onRedo={() => void shootOne(photo, plan, shot, brief)}
-                      onAnimate={() => void animateOne(plan, shot)}
+                      onAnimate={() => {
+                        planRef.current = plan;
+                        if (turnstileEnabled) setAnimateAsk(shot);
+                        else void animateOne(plan, shot);
+                      }}
                       animation={anims[shot.id]}
                     />
                   ))}
