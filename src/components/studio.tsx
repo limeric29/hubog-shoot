@@ -758,6 +758,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         )}
 
         {fixing && photo && <FixCutout photo={photo} initial={mask} onClose={() => setFixing(false)} onApply={(m) => { setFixing(false); void applyMask(photo, m); }} />}
+        {authOpen && <AuthModal siteKey={turnstileSiteKey} turnstileEnabled={turnstileEnabled} reason={authReason} onClose={() => setAuthOpen(false)} onDone={(next) => { setMe(next); setAuthOpen(false); }} />}
       </main>
 
       <footer className={styles.footer}>
