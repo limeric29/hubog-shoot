@@ -11,13 +11,19 @@ const photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcS
 
 // Load the actual animate handlers with a scripted Modal endpoint, so these
 // regressions make no network calls.
-function handlers(modal, env, turnstileStub) {
+function handlers(modal, env, turnstileStub, sparkResult = { motion: 'Steam curls upward while leaves tremble at the frame edges.', camera: 'drift' }) {
   const seen = [];
+  const sparkCalls = [];
   const cache = new Map();
   const testEnv = { NODE_ENV: 'test', ANIMATE_URL: 'https://modal.example/animate', ANIMATE_KEY: 'test-key', ...env };
   const metaStub = {
     MetaError: class extends Error {
       constructor(status, message) { super(message); this.status = status; }
+    },
+    sparkJson: async (options) => {
+      sparkCalls.push(options);
+      if (sparkResult instanceof Error) throw sparkResult;
+      return sparkResult;
     },
   };
   function load(file) {
@@ -52,6 +58,7 @@ function handlers(modal, env, turnstileStub) {
     status: load(path.join(root, 'src/app/api/animate/[callId]/route.ts')).GET,
     video: load(path.join(root, 'src/app/api/animate/[callId]/video/route.ts')).GET,
     seen,
+    sparkCalls,
   };
 }
 
@@ -67,7 +74,7 @@ const body = {
 };
 
 test('starting an animation forwards the photo and prompt to Modal', async () => {
-  const { start, seen } = handlers(() => json({ call_id: 'fc-abc123' }), {});
+  const { start, seen, sparkCalls } = handlers(() => json({ call_id: 'fc-abc123' }), {});
   const res = await start(post(body));
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { call_id: 'fc-abc123' });
@@ -77,7 +84,26 @@ test('starting an animation forwards the photo and prompt to Modal', async () =>
   assert.equal(seen[0].body.aspect, '4:5');
   assert.equal(seen[0].body.duration_sec, 5);
   assert.ok(!seen[0].body.image_b64.startsWith('data:'), 'data URL prefix is stripped');
+  assert.equal(sparkCalls.length, 1);
+  assert.equal(sparkCalls[0].name, 'animate_motion');
+  assert.deepEqual(JSON.parse(JSON.stringify(sparkCalls[0].images)), [photo]);
+});
+
+test('spark-directed motion and camera reach Modal', async () => {
+  const { start, seen } = handlers(() => json({ call_id: 'fc-x' }), {});
+  const res = await start(post(body));
+  assert.equal(res.status, 200);
+  assert.equal(seen[0].body.prompt, 'Steam curls upward while leaves tremble at the frame edges.');
+  assert.equal(seen[0].body.camera, 'drift');
+});
+
+test('a failed direction falls back to the template prompt', async () => {
+  const { start, seen } = handlers(() => json({ call_id: 'fc-x' }), {}, undefined, new Error('spark down'));
+  const res = await start(post(body));
+  assert.equal(res.status, 200);
+  assert.match(seen[0].body.prompt, /Move the surroundings gently/);
   assert.match(seen[0].body.prompt, /Calamansi Juice/);
+  assert.equal(seen[0].body.camera, 'slow_push_in');
 });
 
 test('an unsupported aspect is rejected before any Modal call', async () => {

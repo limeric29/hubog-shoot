@@ -120,6 +120,27 @@ export function scenePrompt(shot: Shot) {
   return `A photorealistic photo of an empty scene: ${shot.backdrop || shot.scene}. Leave the product itself out, and anything that looks like it. Keep a clear, flat, empty surface in the lower centre of the frame with nothing standing on it, where an object can be placed afterwards. No people, no text, no watermark.${space} The frame is cropped slightly afterwards.`;
 }
 
+export const ANIMATE_MOTION_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['motion', 'camera'],
+  properties: {
+    motion: desc('2-3 sentences of visual motion direction under 600 characters'),
+    camera: desc('One of exactly: slow_push_in, static, drift'),
+  },
+} as const;
+
+export const ANIMATE_DIRECTOR_SYSTEM = `You direct 5-second product video clips for online sellers. You get one image: the exact first frame. Write the motion for an image-to-video model.
+
+Hard rules: the product MUST stay pixel-identical — same shape, colours, label and lettering, fully in frame for all 5 seconds. Animate ONLY the surroundings and the camera. NEVER add people, hands, animals, new objects, or on-screen text.
+
+Describe 2-3 concrete moving elements you can actually see in the frame (steam, leaves, water, cloth, light flicker, drifting particles). Present tense, visual and concise, under 60 words. No preamble, no story, no quality adjectives.`;
+
+export function animateDirectorText(product: { name: string; label: string }, shot: { scene: string; backdrop: string }) {
+  const label = product.label ? ` Label reads "${product.label}".` : '';
+  return `Product: ${product.name}.${label} Scene: ${shot.scene || shot.backdrop}. Clip length: 5 seconds.`;
+}
+
 export function animatePrompt(product: { name: string; label: string }, shot: { scene: string; backdrop: string }) {
   const label = product.label ? ` The product label reads "${product.label}".` : '';
   return `Animate this product photo into a short, smooth video clip. Product: ${product.name}.${label} Scene: ${shot.scene || shot.backdrop}. Move the surroundings gently — light, leaves, cloth, drifting particles — while the product itself stays exactly the same: same shape, colours, label and lettering, fully in frame throughout.`;

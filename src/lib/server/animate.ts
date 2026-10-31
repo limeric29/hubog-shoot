@@ -27,10 +27,10 @@ async function modal(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
-export async function animateStart(imageB64: string, prompt: string, aspect: string): Promise<string> {
+export async function animateStart(imageB64: string, prompt: string, aspect: string, camera = 'slow_push_in'): Promise<string> {
   const res = await modal('/start', {
     method: 'POST',
-    body: JSON.stringify({ image_b64: imageB64, prompt, aspect, duration_sec: 5, camera: 'slow_push_in' }),
+    body: JSON.stringify({ image_b64: imageB64, prompt, aspect, duration_sec: 5, camera }),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || typeof json.call_id !== 'string') {
