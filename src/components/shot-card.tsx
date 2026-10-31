@@ -23,12 +23,12 @@ export interface ShotState {
 }
 
 const LABEL: Record<ShotStatus, string> = {
-  queued: 'Waiting',
-  shooting: 'Shooting the scene',
-  checking: 'Checking it is your product',
-  redoing: 'Not quite right. Reshooting',
+  queued: 'Waiting to start',
+  shooting: 'Making the scene',
+  checking: 'Checking the product',
+  redoing: 'Product changed. Trying again',
   done: 'Ready',
-  failed: 'Could not finish this photo',
+  failed: 'Could not make this photo',
 };
 
 const PLATFORM = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok Shop', facebook: 'Facebook' } as const;
@@ -42,19 +42,19 @@ export function ShotCard({ shot, state, fileName, onRedo, onFix }: { shot: Shot;
           // eslint-disable-next-line @next/next/no-img-element
           <img src={state.image} alt={shot.title} className={styles.image} />
         ) : (
-          <div className={styles.emptyPhoto}><Icon name="photo" width="34" height="34" /><span>{busy ? 'Finding your best angle' : 'Let’s try this photo again'}</span></div>
+          <div className={styles.emptyPhoto}><Icon name="photo" width="34" height="34" /><span>{busy ? 'Making this photo…' : 'This photo could not be made.'}</span></div>
         )}
         {state.status === 'done' && (
-          <span className={styles.photoLabel}>{state.composite ? 'Your real product, AI scene' : state.real ? 'Your real photo' : 'AI-made scene'}</span>
+          <span className={styles.photoLabel}>{state.composite ? 'Your product on an AI scene' : state.real && shot.kind === 'main' ? 'Cut from your photo' : state.real ? 'Your original photo' : 'AI-generated scene'}</span>
         )}
-        {busy && state.image && <div className={styles.busyOverlay}>Taking another look…</div>}
+        {busy && state.image && <div className={styles.busyOverlay}>Making another version…</div>}
       </div>
       <div className={styles.cardBody}>
         <div className={styles.cardHeading}>
-          <h3>{shot.title}</h3>
+          <h3>{shot.kind === 'main' ? 'Product cutout' : shot.title}</h3>
           <span className={styles.aspect}>{shot.aspect}</span>
         </div>
-        <p className={styles.platform}>{PLATFORM[shot.platform]}</p>
+        <p className={styles.platform}>{shot.kind === 'main' ? 'White background' : PLATFORM[shot.platform]}</p>
         <p role="status" className={`${styles.status} ${state.status === 'done' ? styles.ready : state.status === 'failed' ? styles.failed : ''}`}>
           {state.status === 'done' ? <Icon name="check" width="14" height="14" /> : <span className={busy ? styles.workingDot : styles.statusDot} />}
           {state.status === 'done' ? (state.verdict?.pass || state.real ? 'Product checked' : 'Ready') : LABEL[state.status]}
@@ -74,8 +74,8 @@ export function ShotCard({ shot, state, fileName, onRedo, onFix }: { shot: Shot;
         {shot.caption && <p className={styles.caption}>{shot.caption}</p>}
         <div className={styles.actions}>
           {state.status === 'done' && state.image && <a href={state.image} download={`${fileName}-${shot.id}.jpg`} className={styles.download}><Icon name="download" width="15" height="15" />Download</a>}
-          {onFix && state.status === 'done' && <button type="button" onClick={onFix} className={styles.secondary}>Fix cutout</button>}
-          {(state.status === 'failed' || (!onFix && state.status === 'done')) && <button type="button" onClick={onRedo} className={styles.secondary}><Icon name="refresh" width="14" height="14" />{state.status === 'failed' ? 'Try again' : 'Reshoot'}</button>}
+          {onFix && state.status === 'done' && <button type="button" onClick={onFix} className={styles.secondary}>Adjust cutout</button>}
+          {(state.status === 'failed' || (!onFix && state.status === 'done')) && <button type="button" onClick={onRedo} className={styles.secondary}><Icon name="refresh" width="14" height="14" />{state.status === 'failed' ? 'Try again' : 'Make again'}</button>}
         </div>
       </div>
     </article>

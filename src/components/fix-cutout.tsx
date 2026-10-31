@@ -44,11 +44,11 @@ export function FixCutout({ photo, initial, onApply, onClose }: { photo: Photo; 
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Fix the cutout">
+    <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Adjust the product outline">
       <div className="flex max-h-full w-full max-w-lg flex-col gap-3 overflow-auto rounded-t-2xl bg-[var(--card)] p-4 sm:rounded-2xl">
         <div>
-          <h2 className="text-lg font-bold">Fix the cutout</h2>
-          <p className="text-sm text-[var(--muted)]">Tap your product to add to the green area. Switch to Remove and tap anything that should not be there.</p>
+          <h2 className="text-lg font-bold">Adjust the product outline</h2>
+          <p className="text-sm text-[var(--muted)]">Tap any part of the product that’s missing. Choose Remove, then tap anything outside the product.</p>
         </div>
         <div className="relative touch-none select-none overflow-hidden rounded-xl border border-[var(--line)]" onPointerDown={tap} style={{ aspectRatio: `${photo.width} / ${photo.height}` }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -66,10 +66,10 @@ export function FixCutout({ photo, initial, onApply, onClose }: { photo: Photo; 
         {error && <p className="text-sm text-[var(--warn)]">{error}</p>}
         <div className="flex gap-2">
           <button type="button" onClick={() => setRemove(false)} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${remove ? 'border-[var(--line)]' : 'border-green-700 bg-green-700 text-white'}`}>
-            Add
+            Keep
           </button>
           <button type="button" onClick={() => setRemove(true)} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${remove ? 'border-red-600 bg-red-600 text-white' : 'border-[var(--line)]'}`}>
-            Remove
+            Erase
           </button>
           <button
             type="button"
@@ -87,7 +87,7 @@ export function FixCutout({ photo, initial, onApply, onClose }: { photo: Photo; 
             Cancel
           </button>
           <button type="button" disabled={!mask || busy} onClick={() => mask && onApply(mask)} className="flex-1 rounded-lg bg-[var(--accent)] px-3 py-3 font-bold text-white disabled:opacity-50">
-            Use this cutout
+            Use this selection
           </button>
         </div>
       </div>
