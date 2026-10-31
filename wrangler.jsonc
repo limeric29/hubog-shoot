@@ -31,7 +31,5 @@
     "TURNSTILE_SITEKEY": "0x4AAAAAAFtTm2cPGOof09MP",
     "TURNSTILE_HOSTNAMES": "shoot.hubog.app"
   },
-  "secrets": { "required": ["MODEL_API_KEY", "MUSE_SPARK_API_KEY", "TURNSTILE_SECRET"] }
-}
-: { "required": ["MODEL_API_KEY", "TURNSTILE_SECRET"] }
+  "secrets": { "required": ["MODEL_API_KEY", "TURNSTILE_SECRET"] }
 }
