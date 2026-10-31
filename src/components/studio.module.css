@@ -50,6 +50,26 @@
 .intro > p { max-width: 320px; padding-bottom: 4px; color: var(--muted); font-size: 15px; line-height: 1.75; }
 .error { margin-bottom: 22px; border: 1px solid var(--danger-border); border-radius: 12px; background: var(--danger-bg); padding: 14px 18px; color: var(--warn); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 
+.history { margin: -10px 0 30px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.historyToggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px; color: var(--ink); text-align: left; }
+.historyToggle > span:first-child { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 650; }
+.historyToggle svg { color: var(--accent); }
+.historyCount { display: grid; min-width: 25px; height: 25px; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 700; }
+.historyRail { display: grid; grid-template-columns: repeat(auto-fit, minmax(235px, 1fr)); gap: 10px; border-top: 1px solid var(--line); padding: 12px; }
+.historyItem { display: flex; min-width: 0; align-items: center; gap: 10px; border-radius: 10px; background: var(--bg); padding: 9px; }
+.historyItem > img { flex: 0 0 52px; width: 52px; height: 52px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); object-fit: contain; }
+.historyDetails { display: flex; min-width: 0; flex: 1; flex-direction: column; align-items: flex-start; gap: 3px; }
+.historyDetails strong { max-width: 100%; overflow: hidden; color: var(--ink); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.historyDetails > span { color: var(--muted); font-size: 10px; }
+.historyDetails button { margin-top: 3px; color: var(--accent); font-size: 11px; font-weight: 650; }
+.historyDetails button:disabled { color: var(--muted); cursor: not-allowed; }
+.removeHistory { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 50%; color: var(--muted); font-size: 19px; }
+.removeHistory:hover { background: var(--line); color: var(--ink); }
+.removeHistory:disabled { opacity: .4; cursor: not-allowed; }
+.historyNote { border-top: 1px solid var(--line); padding: 11px 16px 0; color: var(--muted); font-size: 11px; }
+.historyEmpty, .historyMessage { border-top: 1px solid var(--line); padding: 13px 16px; color: var(--muted); font-size: 12px; }
+.historyMessage { color: var(--warn); }
+
 .workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: stretch; }
 .briefPanel { min-width: 0; padding: 28px; border: 1px solid var(--line); border-radius: 20px; background: var(--card); }
 .fieldHeading { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; }
@@ -128,6 +148,12 @@
 .sectionHeading h2, .listingHeading h2 { font-family: var(--font-display), sans-serif; font-size: 24px; font-weight: 600; letter-spacing: -.5px; }
 .sectionHeading > span { color: var(--muted); font-size: 12px; }
 .shotGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.originalCard { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 17px; background: var(--card); }
+.originalPhotoMat { display: grid; width: 100%; aspect-ratio: 1 / 1.1; place-items: center; overflow: hidden; border-bottom: 1px solid var(--line); background: var(--surface-alt); padding: 15px; }
+.originalPhotoMat img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.originalCardBody { padding: 18px; }
+.originalCardBody h3 { font-family: var(--font-display), sans-serif; font-size: 20px; font-weight: 600; letter-spacing: -.5px; line-height: 1.25; }
+.originalCardBody p { margin-top: 5px; color: var(--muted); font-size: 11px; }
 .listingSidebar { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .listingPanel { border: 1px solid var(--line); border-radius: 18px; background: var(--card); padding: 22px; }
 .listingHeading { display: flex; align-items: center; gap: 9px; }
@@ -245,6 +271,8 @@
   .productSummary h2 { font-size: 20px; }
   .labelText { font-size: 10px; }
   .shotGrid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .history { margin-top: 0; }
+  .historyRail { grid-template-columns: minmax(0, 1fr); }
   .sectionHeading h2 { font-size: 23px; }
   .answerRow input { font-size: 16px; }
   .footer { flex-direction: column; gap: 8px; padding-block: 20px 25px; }

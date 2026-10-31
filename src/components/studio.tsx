@@ -11,6 +11,7 @@ import { FixCutout } from './fix-cutout';
 import { ShotCard, type ShotState } from './shot-card';
 import { Icon } from './icon';
 import { PackPreview } from './pack-preview';
+import { deleteShoot, getShoot, listShoots, saveShoot, type ShootHistoryItem } from '@/lib/client/shoot-history';
 import styles from './studio.module.css';
 
 type Stage = 'brief' | 'planning' | 'results';
@@ -65,14 +66,54 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   const [turnstileReady, setTurnstileReady] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [turnstileError, setTurnstileError] = useState('');
+  const [history, setHistory] = useState<ShootHistoryItem[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyMessage, setHistoryMessage] = useState('');
+  const [activeShootId, setActiveShootId] = useState('');
   const turnstileContainer = useRef<HTMLDivElement>(null);
   const turnstileId = useRef<TurnstileId | null>(null);
+  const shootCreatedAt = useRef(0);
   const recorder = useRef(new Recorder());
   // The real cutout, ready once the main image is done. The fallback for a failed scene waits on it.
   const cutReady = useRef<Promise<HTMLCanvasElement | null>>(Promise.resolve(null));
 
   const hasPlanQuestion = Boolean(plan?.question);
   const showTurnstile = turnstileEnabled && (stage !== 'results' || hasPlanQuestion);
+
+  useEffect(() => {
+    void listShoots().then(setHistory).catch(() => setHistoryMessage('Shoot history is unavailable in this browser.'));
+  }, []);
+
+  useEffect(() => {
+    if (stage !== 'results' || !activeShootId || !plan || !photo) return;
+    const timer = window.setTimeout(() => {
+      const savedShots = Object.fromEntries(plan.shots.map((shot) => {
+        const state = shots[shot.id] ?? { status: 'queued' as const };
+        const finished = state.status === 'done' && Boolean(state.image);
+        return [shot.id, {
+          status: finished ? 'done' as const : 'failed' as const,
+          ...(state.image ? { image: state.image } : {}),
+          ...(state.real !== undefined ? { real: state.real } : {}),
+          ...(state.composite !== undefined ? { composite: state.composite } : {}),
+          ...(state.verdict ? { verdict: state.verdict } : {}),
+          ...(!finished ? { error: state.error || 'This photo was still being made when you left. Try again.' } : {}),
+        }];
+      }));
+      void saveShoot({
+        id: activeShootId,
+        createdAt: shootCreatedAt.current || Date.now(),
+        updatedAt: Date.now(),
+        brief,
+        photo,
+        plan,
+        shots: savedShots,
+        mask,
+      }).then(() => listShoots().then(setHistory)).catch(() => {
+        setHistoryMessage('This shoot could not be saved. Check your browser storage and try again.');
+      });
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [activeShootId, brief, mask, photo, plan, shots, stage]);
 
   useEffect(() => {
     if (!showTurnstile || !turnstileSiteKey || !turnstileReady || !turnstileContainer.current || !window.turnstile) return;
@@ -216,6 +257,10 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       return;
     }
     setError('');
+    setHistoryMessage('');
+    const shootId = crypto.randomUUID();
+    shootCreatedAt.current = Date.now();
+    setActiveShootId(shootId);
     setStage('planning');
     try {
       const p = await api<Plan>('/api/plan', { photo: photo.url, brief, turnstileToken: turnstileEnabled ? turnstileToken : undefined });
@@ -233,9 +278,46 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       );
     } catch (err) {
       setError(message(err));
+      setActiveShootId('');
       setStage('brief');
     } finally {
       resetTurnstile();
+    }
+  }
+
+  async function openPastShoot(id: string) {
+    try {
+      const saved = await getShoot(id);
+      if (!saved) {
+        setHistory((items) => items.filter((item) => item.id !== id));
+        return;
+      }
+      setPhoto(saved.photo);
+      setBrief(saved.brief);
+      setPlan(saved.plan);
+      setShots(saved.shots as Record<string, ShotState>);
+      setMask(saved.mask);
+      cutReady.current = saved.mask ? cutout(saved.photo, saved.mask).catch(() => null) : Promise.resolve(null);
+      setActiveShootId(saved.id);
+      shootCreatedAt.current = saved.createdAt;
+      setAnswer('');
+      setCopied('');
+      setError('');
+      setHistoryOpen(false);
+      setStage('results');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      setHistoryMessage('This shoot could not be opened from browser storage.');
+    }
+  }
+
+  async function removePastShoot(id: string) {
+    try {
+      await deleteShoot(id);
+      setHistory((items) => items.filter((item) => item.id !== id));
+      if (activeShootId === id) setActiveShootId('');
+    } catch {
+      setHistoryMessage('This shoot could not be removed from browser storage.');
     }
   }
 
@@ -344,6 +426,33 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
           <p>{stage === 'results' ? 'Download each photo as it’s ready. Your listing text is here too.' : 'Make product photos, captions, and listing text for your shop.'}</p>
         </div>
 
+        <section className={styles.history} aria-label="Previous shoots">
+          <button type="button" className={styles.historyToggle} onClick={() => setHistoryOpen((open) => !open)} aria-expanded={historyOpen}>
+            <span><Icon name="refresh" width="16" height="16" />Previous shoots</span>
+            <span className={styles.historyCount}>{history.length}</span>
+          </button>
+          {historyOpen && (history.length ? (
+            <>
+              <p className={styles.historyNote}>Saved in this browser only. The 10 most recent shoots are kept.</p>
+              <div className={styles.historyRail}>
+                {history.map((item) => (
+                  <article key={item.id} className={styles.historyItem}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.photoUrl} alt="" width="56" height="56" />
+                    <div className={styles.historyDetails}>
+                      <strong>{item.productName}</strong>
+                      <span>{new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' }).format(item.updatedAt)} · {item.readyCount} of {item.shotCount} photos</span>
+                      <button type="button" disabled={stage === 'planning' || (stage === 'results' && !settled)} onClick={() => void openPastShoot(item.id)}>Open shoot</button>
+                    </div>
+                    <button type="button" className={styles.removeHistory} disabled={stage === 'planning' || (stage === 'results' && !settled && item.id === activeShootId)} aria-label={`Delete ${item.productName} from previous shoots`} onClick={() => void removePastShoot(item.id)}>×</button>
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : <p className={styles.historyEmpty}>Your saved shoots will appear here on this device.</p>)}
+          {historyMessage && <p role="status" className={styles.historyMessage}>{historyMessage}</p>}
+        </section>
+
         {error && <p role="alert" className={styles.error}>{error}</p>}
 
         {stage !== 'results' && (
@@ -425,7 +534,17 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
               <section className={styles.gallery} aria-label="Your photos">
                 <div className={styles.sectionHeading}><h2>Your photos</h2><span role="status">{readyCount} of {plan.shots.length} ready</span></div>
                 <div className={styles.shotGrid}>
-                  {plan.shots.map((shot) => (
+                  <article className={styles.originalCard}>
+                    <div className={styles.originalPhotoMat}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photo.url} alt="Original product photo" />
+                    </div>
+                    <div className={styles.originalCardBody}>
+                      <h3>Original product photo</h3>
+                      <p>The photo you uploaded</p>
+                    </div>
+                  </article>
+                  {plan.shots.filter((shot) => shot.kind === 'main').map((shot) => (
                     <ShotCard
                       key={shot.id}
                       shot={shot}
@@ -433,6 +552,15 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                       fileName={slug(plan.product.name)}
                       onRedo={() => void (shot.kind === 'main' ? makeMain(photo, plan) : shootOne(photo, plan, shot, brief))}
                       onFix={shot.kind === 'main' ? () => setFixing(true) : undefined}
+                    />
+                  ))}
+                  {plan.shots.filter((shot) => shot.kind !== 'main').map((shot) => (
+                    <ShotCard
+                      key={shot.id}
+                      shot={shot}
+                      state={shots[shot.id] ?? { status: 'queued' }}
+                      fileName={slug(plan.product.name)}
+                      onRedo={() => void shootOne(photo, plan, shot, brief)}
                     />
                   ))}
                 </div>
