@@ -2,6 +2,7 @@
 export async function api<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
     method: 'POST',
+    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });

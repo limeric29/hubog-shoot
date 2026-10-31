@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import Script from 'next/script';
+import { useEffect, useRef, useState } from 'react';
 import { api, transcribe } from '@/lib/client/api';
 import { cutout, fitShot, loadPhoto, onWhite, placeOnScene, type Photo } from '@/lib/client/image';
 import { Recorder } from '@/lib/client/voice';
@@ -14,6 +15,26 @@ import styles from './studio.module.css';
 
 type Stage = 'brief' | 'planning' | 'results';
 type Mic = 'idle' | 'recording' | 'transcribing';
+type TurnstileId = string;
+
+type Turnstile = {
+  render: (container: HTMLElement, options: {
+    sitekey: string;
+    action: string;
+    size?: 'normal' | 'flexible' | 'compact';
+    callback: (token: string) => void;
+    'expired-callback'?: () => void;
+    'error-callback'?: () => void;
+  }) => TurnstileId;
+  reset: (id: TurnstileId) => void;
+  remove?: (id: TurnstileId) => void;
+};
+
+declare global {
+  interface Window {
+    turnstile?: Turnstile;
+  }
+}
 
 const message = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong. Please try again.');
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'product';
@@ -27,7 +48,7 @@ async function pool<T>(items: T[], size: number, fn: (item: T) => Promise<void>)
   );
 }
 
-export function Studio() {
+export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnabled: boolean; turnstileSiteKey: string }) {
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [brief, setBrief] = useState('');
@@ -41,9 +62,44 @@ export function Studio() {
   const [answer, setAnswer] = useState('');
   const [updating, setUpdating] = useState(false);
   const [copied, setCopied] = useState('');
+  const [turnstileReady, setTurnstileReady] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileError, setTurnstileError] = useState('');
+  const turnstileContainer = useRef<HTMLDivElement>(null);
+  const turnstileId = useRef<TurnstileId | null>(null);
   const recorder = useRef(new Recorder());
   // The real cutout, ready once the main image is done. The fallback for a failed scene waits on it.
   const cutReady = useRef<Promise<HTMLCanvasElement | null>>(Promise.resolve(null));
+
+  const hasPlanQuestion = Boolean(plan?.question);
+  const showTurnstile = turnstileEnabled && (stage !== 'results' || hasPlanQuestion);
+
+  useEffect(() => {
+    if (!showTurnstile || !turnstileSiteKey || !turnstileReady || !turnstileContainer.current || !window.turnstile) return;
+    turnstileId.current = window.turnstile.render(turnstileContainer.current, {
+      sitekey: turnstileSiteKey,
+      action: 'shoot',
+      size: hasPlanQuestion ? 'compact' : 'normal',
+      callback: (token) => {
+        setTurnstileToken(token);
+        setTurnstileError('');
+      },
+      'expired-callback': () => {
+        setTurnstileToken('');
+        setTurnstileError('Verification expired. Complete it again to continue.');
+      },
+      'error-callback': () => {
+        setTurnstileToken('');
+        setTurnstileError('Verification could not load. Refresh the page and try again.');
+      },
+    });
+
+    return () => {
+      if (turnstileId.current !== null) window.turnstile?.remove?.(turnstileId.current);
+      turnstileId.current = null;
+      setTurnstileToken('');
+    };
+  }, [showTurnstile, stage, hasPlanQuestion, turnstileReady, turnstileSiteKey]);
 
   const patch = (id: string, next: Partial<ShotState>) => setShots((all) => ({ ...all, [id]: { ...all[id], ...next } }));
 
@@ -58,6 +114,12 @@ export function Studio() {
     } finally {
       setPhotoLoading(false);
     }
+  }
+
+  function resetTurnstile() {
+    const id = turnstileId.current;
+    if (id !== null && window.turnstile) window.turnstile.reset(id);
+    setTurnstileToken('');
   }
 
   async function toggleMic() {
@@ -145,10 +207,18 @@ export function Studio() {
 
   async function start() {
     if (!photo) return;
+    if (turnstileEnabled && !turnstileSiteKey) {
+      setError('Photo verification is not available yet. Please try again later.');
+      return;
+    }
+    if (turnstileEnabled && !turnstileToken) {
+      setError('Complete the quick verification before making your photos.');
+      return;
+    }
     setError('');
     setStage('planning');
     try {
-      const p = await api<Plan>('/api/plan', { photo: photo.url, brief });
+      const p = await api<Plan>('/api/plan', { photo: photo.url, brief, turnstileToken: turnstileEnabled ? turnstileToken : undefined });
       setPlan(p);
       setAnswer('');
       setCopied('');
@@ -164,16 +234,22 @@ export function Studio() {
     } catch (err) {
       setError(message(err));
       setStage('brief');
+    } finally {
+      resetTurnstile();
     }
   }
 
   /** Re-plans with the seller's answer, keeping every image and redrawing headlines for free. */
   async function sendAnswer() {
     if (!photo || !plan || !answer.trim()) return;
+    if (turnstileEnabled && !turnstileToken) {
+      setError('Complete the quick verification before updating your listing.');
+      return;
+    }
     setUpdating(true);
     setError('');
     try {
-      const next = await api<Plan>('/api/plan', { photo: photo.url, brief, answer });
+      const next = await api<Plan>('/api/plan', { photo: photo.url, brief, answer, turnstileToken: turnstileEnabled ? turnstileToken : undefined });
       const merged: Plan = {
         ...plan,
         question: '',
@@ -194,6 +270,7 @@ export function Studio() {
       setError(message(err));
     } finally {
       setUpdating(false);
+      resetTurnstile();
     }
   }
 
@@ -242,6 +319,7 @@ export function Studio() {
   return (
     <div className={styles.app}>
       <a href="#studio" className={styles.skipLink}>Skip to studio</a>
+      {turnstileEnabled && turnstileSiteKey && <Script id="turnstile" src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" strategy="afterInteractive" onReady={() => setTurnstileReady(true)} onError={() => setTurnstileError('Verification could not load. Refresh the page and try again.')} />}
       <header className={styles.header}>
         <div className={styles.brand} role="img" aria-label="Hubog Shoot">
           {/* Keep the original Hubog lockup unchanged; Shoot is a separate descriptor. */}
@@ -309,11 +387,18 @@ export function Studio() {
               <p id="brief-help" className={styles.helper} role="status">
                 {mic === 'recording' ? 'Listening. Tap stop when you’re done.' : mic === 'transcribing' ? 'Transcribing…' : 'Add a few details or tap the mic. English, Filipino, or Taglish.'}
               </p>
-              <button type="button" disabled={!photo || photoLoading || stage === 'planning' || mic !== 'idle'} onClick={() => void start()} className={styles.primaryButton}>
+              {showTurnstile && (
+                <div className={styles.verification}>
+                  {turnstileSiteKey ? <div ref={turnstileContainer} className={styles.turnstileWidget} /> : <p role="status">Photo verification is not available right now.</p>}
+                  {turnstileError && <p role="alert">{turnstileError}</p>}
+                  {!turnstileError && turnstileSiteKey && !turnstileToken && <p>Complete the security check to continue.</p>}
+                </div>
+              )}
+              <button type="button" disabled={!photo || photoLoading || (turnstileEnabled && (!turnstileSiteKey || !turnstileToken)) || stage === 'planning' || mic !== 'idle'} onClick={() => void start()} className={styles.primaryButton}>
                 {stage === 'planning' ? <span className={styles.spinner} /> : <Icon name="camera" />}
                 {stage === 'planning' ? 'Planning your shoot…' : 'Make my photos'}
               </button>
-              <p className={styles.actionNote} role="status">{stage === 'planning' ? 'Getting your photos ready…' : 'You’ll get a main photo, a few scenes, a close-up, and a promo.'}</p>
+              <p className={styles.actionNote} role="status">{stage === 'planning' ? 'Getting your photos ready…' : !turnstileEnabled || turnstileToken ? 'You’ll get a main photo, a few scenes, a close-up, and a promo.' : 'Complete the check before making your photos.'}</p>
             </section>
             <PackPreview />
           </div>
@@ -360,8 +445,11 @@ export function Studio() {
                     <label htmlFor="seller-answer">{plan.question}</label>
                     <div className={styles.answerRow}>
                       <input id="seller-answer" value={answer} onChange={(e) => setAnswer(e.target.value)} disabled={updating} placeholder="Your answer" />
-                      <button type="button" disabled={updating || !answer.trim()} onClick={() => void sendAnswer()} className={styles.smallPrimary}>{updating ? 'Updating…' : 'Update'}</button>
+                      <button type="button" disabled={updating || !answer.trim() || (turnstileEnabled && !turnstileToken)} onClick={() => void sendAnswer()} className={styles.smallPrimary}>{updating ? 'Updating…' : 'Update'}</button>
                     </div>
+                    {showTurnstile && turnstileSiteKey && <div ref={turnstileContainer} className={`${styles.turnstileWidget} ${styles.compactTurnstile}`} />}
+                    {turnstileError && <p role="alert">{turnstileError}</p>}
+                    {turnstileEnabled && !turnstileError && !turnstileToken && <p>Complete the security check to continue.</p>}
                     <p>We’ll update your listing and the text on your photos.</p>
                   </section>
                 )}

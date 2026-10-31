@@ -34,16 +34,18 @@ The plan, the schedule and the rules checklist are in [docs/PLAN.md](docs/PLAN.m
 
 ## Run it
 
-Requires Node 22.9 or later and a [Meta Model API](https://dev.meta.ai/) key.
+Requires Node 22.9 or later, a [Meta Model API](https://dev.meta.ai/) key, and a Cloudflare Turnstile widget.
 
 ```bash
 npm install
-cp .env.example .env.local   # then add MODEL_API_KEY
+cp .env.example .env.local   # add MODEL_API_KEY and Turnstile keys
 npm run smoke                # checks every model, costs about $0.02
 npm run dev                  # http://localhost:3000
 ```
 
 Model IDs are read from server environment variables. The defaults are `muse-spark-1.3`, `muse-image-1.0`, `sam-3.1`, and `muse-voice-transcribe-1.0`; change `MUSE_SPARK_MODEL`, `MUSE_IMAGE_MODEL`, `SAM_MODEL`, or `MUSE_VOICE_TRANSCRIBE_MODEL` in `.env.local` or `wrangler.jsonc`. `META_API_BASE_URL` can point to another compatible endpoint. If the selected models have different rates, update the `*_USD_*` pricing variables too so the spend log and cap stay accurate.
+
+Turnstile is off during development and on in production. Set `TURNSTILE_ENABLED=false` locally to disable it; the production Worker config enables it for `shoot.hubog.app`.
 
 ## Deploy
 
@@ -53,8 +55,11 @@ The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cl
 npm run cf:build
 npx wrangler deploy --secrets-file <file containing MODEL_API_KEY=...>   # first deploy only; delete the file after
 npx wrangler secret put MODEL_API_KEY                                    # later changes to the key
+npx wrangler secret put TURNSTILE_SECRET
 npm run cf:deploy                                                        # later deploys
 ```
+
+Each photo shoot requires a verified Turnstile token; the server also checks the token's action and hostname, then gives the browser a one-hour signed session cookie for the image-generation calls.
 
 With the default models and rates, one full run costs about $0.15–0.30 of Meta credit. Set `HUBOG_KILL=1` to pause every paid call and `SPEND_CAP_USD` to stop at a total. Each paid call also writes a `{"t":"spend",...}` line to the server log.
 

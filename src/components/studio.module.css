@@ -80,6 +80,10 @@
 .micButton:disabled { opacity: .6; }
 .recording, .recording:hover { background: var(--danger); border-color: var(--danger); color: var(--hubog-white); }
 .helper { margin-top: 9px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.verification { display: flex; width: fit-content; max-width: 100%; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 11px 13px; }
+.verification > p { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.turnstileWidget { min-height: 65px; }
+.compactTurnstile { width: min(150px, 100%); min-height: 140px; }
 .primaryButton { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 52px; border: 1px solid transparent; border-radius: 999px; background: var(--button-bg); padding: 12px 18px; color: var(--hubog-white); font-size: 15px; font-weight: 700; line-height: 1.5; text-align: center; }
 .primaryButton:hover:not(:disabled), .smallPrimary:hover:not(:disabled) { background: var(--button-hover); }
 .primaryButton:disabled { background: var(--surface-alt); border-color: var(--line); color: var(--muted); }

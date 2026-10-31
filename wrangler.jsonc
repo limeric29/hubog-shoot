@@ -1,6 +1,6 @@
 // Hubog Shoot on Cloudflare Workers, through the OpenNext adapter (`npm run cf:build` builds .open-next/).
 // Vars and secrets reach the app as process.env.
-// Secret (never here): npx wrangler secret put MODEL_API_KEY   # the Meta Model API key
+// Secrets (never here): MODEL_API_KEY, TURNSTILE_SECRET.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "hubog-shoot",
@@ -26,6 +26,9 @@
     "MUSE_IMAGE_USD_PER_IMAGE": "0.01",
     "SAM_USD_PER_IMAGE": "0.0025",
     "MUSE_VOICE_USD_PER_HOUR": "0.18",
+    "TURNSTILE_ENABLED": "true",
+    "TURNSTILE_SITEKEY": "0x4AAAAAAFtTm2cPGOof09MP",
+    "TURNSTILE_HOSTNAMES": "shoot.hubog.app"
   },
-  "secrets": { "required": ["MODEL_API_KEY"] }
+  "secrets": { "required": ["MODEL_API_KEY", "TURNSTILE_SECRET"] }
 }

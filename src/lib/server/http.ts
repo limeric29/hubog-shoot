@@ -5,7 +5,8 @@ const MAX_IMAGE_CHARS = 6_000_000;
 
 export async function handle(fn: () => Promise<unknown>): Promise<Response> {
   try {
-    return Response.json(await fn());
+    const result = await fn();
+    return result instanceof Response ? result : Response.json(result);
   } catch (err) {
     const status = err instanceof MetaError && err.status >= 400 && err.status < 600 ? err.status : 500;
     console.error(err);
@@ -18,7 +19,7 @@ export async function handle(fn: () => Promise<unknown>): Promise<Response> {
 // The spend cap in meta.ts is the backstop.
 const hits = new Map<string, { n: number; day: string }>();
 
-export function rateLimit(req: Request, bucket: string, max: number) {
+export function rateLimit(req: Request, bucket: string, max: number, message = "You have used today's free shoots on this demo. Please come back tomorrow.") {
   if (process.env.NODE_ENV !== 'production') return;
   const ip = req.headers.get('cf-connecting-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   const day = new Date().toISOString().slice(0, 10);
@@ -27,7 +28,7 @@ export function rateLimit(req: Request, bucket: string, max: number) {
   const n = seen && seen.day === day ? seen.n + 1 : 1;
   if (hits.size > 5000) hits.clear();
   hits.set(key, { n, day });
-  if (n > max) throw new MetaError(429, "You have used today's free shoots on this demo. Please come back tomorrow.");
+  if (n > max) throw new MetaError(429, message);
 }
 
 export function imageUrl(value: unknown, name: string): string {
