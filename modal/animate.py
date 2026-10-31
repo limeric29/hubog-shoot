@@ -42,10 +42,14 @@ KEY_SECRET = modal.Secret.from_name("hubog-shoot-animate-key")
 
 AUDIO_LINE = "Sound: natural ambience and foley for the scene; no music."
 NO_TEXT_LINE = "No on-screen text, captions or logos."
+# LTX-2.5 cuts to new shots on cue, so product clips pin a single take.
+# Prompt shape follows Lightricks' guide (docs.ltx.io, prompting-guide):
+# one present-tense paragraph, motion + camera with end framing, no cuts.
+TAKE_LINE = "A single continuous take with no cuts."
 CAMERA_HINTS = {
-    "slow_push_in": "The camera slowly pushes in, keeping the product fully in frame.",
-    "static": "Static camera, locked-off shot.",
-    "drift": "The camera drifts very gently sideways, keeping the product fully in frame.",
+    "slow_push_in": "The camera slowly pushes in, ending in a medium close-up with the product centered and fully in frame.",
+    "static": "Static camera, locked-off shot; the product stays centered and fully in frame throughout.",
+    "drift": "The camera drifts very gently sideways and settles with the product centered and fully in frame.",
 }
 
 app = modal.App(APP_NAME)
@@ -211,7 +215,7 @@ class Animator:
         width, height = SIZES.get(job.get("aspect"), SIZES["4:5"])
         frames = FRAMES.get(int(job.get("duration_sec", 5)), FRAMES[5])
         camera = CAMERA_HINTS.get(job.get("camera"), CAMERA_HINTS["slow_push_in"])
-        prompt = " ".join(x for x in (job.get("prompt", "").strip(), camera, AUDIO_LINE, NO_TEXT_LINE) if x)
+        prompt = " ".join(x for x in (job.get("prompt", "").strip(), camera, TAKE_LINE, AUDIO_LINE, NO_TEXT_LINE) if x)
         try:
             raw = base64.b64decode(job["image_b64"])
         except Exception:

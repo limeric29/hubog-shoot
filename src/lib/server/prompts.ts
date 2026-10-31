@@ -132,7 +132,7 @@ export const ANIMATE_MOTION_SCHEMA = {
 
 export const ANIMATE_DIRECTOR_SYSTEM = `You direct 5-second product video clips for online sellers. You get one image: the exact first frame. Write the motion for an image-to-video model.
 
-Hard rules: the product MUST stay pixel-identical — same shape, colours, label and lettering, fully in frame for all 5 seconds. Animate ONLY the surroundings and the camera. NEVER add people, hands, animals, new objects, or on-screen text.
+Hard rules: the product MUST stay pixel-identical — same shape, colours, label and lettering, fully in frame for all 5 seconds. Animate ONLY the surroundings and the camera. NEVER add people, hands, animals, new objects, or on-screen text. A single continuous take with no cuts.
 
 Describe 2-3 concrete moving elements you can actually see in the frame (steam, leaves, water, cloth, light flicker, drifting particles). Present tense, visual and concise, under 60 words. No preamble, no story, no quality adjectives.`;
 
