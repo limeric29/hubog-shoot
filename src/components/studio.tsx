@@ -447,7 +447,9 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         <div className={styles.brand} role="img" aria-label="Hubog Shoot">
           {/* Keep the original Hubog lockup unchanged; Shoot is a separate descriptor. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/hubog-lockup-light-240.png" alt="" width="240" height="73" className={styles.brandLogo} />
+          <img src="/brand/hubog-lockup-light-240.png" alt="" width="240" height="73" className={`${styles.brandLogo} ${styles.brandLogoLight}`} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/hubog-lockup-dark-240.png" alt="" width="240" height="73" className={`${styles.brandLogo} ${styles.brandLogoDark}`} aria-hidden="true" />
           <span className={styles.shootDescriptor} aria-hidden="true">shoot<svg viewBox="0 0 72 34" preserveAspectRatio="none" aria-hidden="true"><path d="M1 9V2a1 1 0 0 1 1-1h7m54 0h7a1 1 0 0 1 1 1v7M1 25v7a1 1 0 0 0 1 1h7m54 0h7a1 1 0 0 0 1-1v-7" /></svg></span>
         </div>
         <ol className={styles.steps} aria-label="Your progress">

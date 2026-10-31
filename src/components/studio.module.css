@@ -33,6 +33,14 @@
 
 .brand { display: flex; align-items: center; gap: 12px; padding: 12px; margin-left: -12px; white-space: nowrap; }
 .brandLogo { display: block; width: auto; height: 36px; }
+.brandLogoLight { display: block; }
+.brandLogoDark { display: none; }
+:global(:root[data-theme='dark']) .brandLogoLight { display: none; }
+:global(:root[data-theme='dark']) .brandLogoDark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme='light'])) .brandLogoLight { display: none; }
+  :global(:root:not([data-theme='light'])) .brandLogoDark { display: block; }
+}
 .shootDescriptor { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 68px; height: 34px; margin-left: 3px; padding: 4px 9px; font-family: var(--font-display), sans-serif; font-size: 17px; font-weight: 600; letter-spacing: -.6px; color: var(--ink); }
 .shootDescriptor svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: var(--hubog-blue); stroke-width: 1.5; }
 .headerNote { max-width: 150px; font-size: 12px; line-height: 1.6; color: var(--muted); }
