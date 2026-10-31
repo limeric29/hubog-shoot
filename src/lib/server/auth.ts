@@ -35,8 +35,9 @@ const unb64 = (s: string) => new Uint8Array(Buffer.from(s, 'base64'));
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt as BufferSource, iterations: 120_000, hash: 'SHA-256' }, key, 256));
-  return `pbkdf2$120000$${b64(salt)}$${b64(bits)}`;
+  // Workers caps PBKDF2 at 100k iterations; the count rides in the hash so it can rise later.
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt as BufferSource, iterations: 100_000, hash: 'SHA-256' }, key, 256));
+  return `pbkdf2$100000$${b64(salt)}$${b64(bits)}`;
 }
 
 function slowEqual(a: Uint8Array, b: Uint8Array): boolean {

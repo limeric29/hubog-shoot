@@ -11,7 +11,9 @@ export async function handle(fn: () => Promise<unknown>): Promise<Response> {
     const status = err instanceof MetaError && err.status >= 400 && err.status < 600 ? err.status : 500;
     console.error(err);
     const code = err instanceof MetaError ? err.code : undefined;
-    return Response.json({ error: err instanceof Error ? err.message : 'Something went wrong.', ...(code ? { code } : {}) }, { status });
+    // Unexpected failures keep a generic message: crypto and config details must not leak to clients.
+    const message = err instanceof MetaError ? err.message : 'Something went wrong. Please try again.';
+    return Response.json({ error: message, ...(code ? { code } : {}) }, { status });
   }
 }
 
