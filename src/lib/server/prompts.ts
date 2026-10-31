@@ -126,7 +126,7 @@ export const ANIMATE_MOTION_SCHEMA = {
   required: ['motion', 'camera'],
   properties: {
     motion: desc('2-3 sentences of visual motion direction under 600 characters'),
-    camera: desc('One of exactly: slow_push_in, static, drift'),
+    camera: { type: 'string', enum: ['slow_push_in', 'static', 'drift'], description: 'The camera move for the clip' },
   },
 } as const;
 
