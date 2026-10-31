@@ -33,6 +33,9 @@
 .animating { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--accent); font-size: 11px; font-weight: 600; line-height: 1.5; }
 .videoWrap { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .video { display: block; width: 100%; border-radius: 10px; background: #000; }
+.verifyBox { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 14px; border: 1px solid var(--line-control); border-radius: 10px; background: var(--accent-soft); padding: 12px; }
+.verifyBox p { font-size: 11px; line-height: 1.6; }
+.verifyWidget { min-height: 120px; }
 
 @media (max-width: 540px) {
   .photoMat { aspect-ratio: 1 / 1.05; padding: 16px; }

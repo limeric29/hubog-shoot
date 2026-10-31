@@ -1,5 +1,6 @@
 'use client';
 
+import type { RefObject } from 'react';
 import type { Shot, Verdict } from '@/lib/types';
 import { Icon } from './icon';
 import styles from './shot-card.module.css';
@@ -39,7 +40,13 @@ export interface AnimationState {
   error?: string;
 }
 
-export function ShotCard({ shot, state, fileName, onRedo, onFix, onAnimate, animation }: { shot: Shot; state: ShotState; fileName: string; onRedo: () => void; onFix?: () => void; onAnimate?: () => void; animation?: AnimationState }) {
+export interface AnimateVerify {
+  box: RefObject<HTMLDivElement | null>;
+  siteKey: string;
+  onCancel: () => void;
+}
+
+export function ShotCard({ shot, state, fileName, onRedo, onFix, onAnimate, animation, verify }: { shot: Shot; state: ShotState; fileName: string; onRedo: () => void; onFix?: () => void; onAnimate?: () => void; animation?: AnimationState; verify?: AnimateVerify }) {
   const busy = state.status === 'queued' || state.status === 'shooting' || state.status === 'checking' || state.status === 'redoing';
   return (
     <article className={styles.card} aria-label={shot.title}>
@@ -82,8 +89,15 @@ export function ShotCard({ shot, state, fileName, onRedo, onFix, onAnimate, anim
           {state.status === 'done' && state.image && <a href={state.image} download={`${fileName}-${shot.id}.jpg`} className={styles.download}><Icon name="download" width="15" height="15" />Download</a>}
           {onFix && state.status === 'done' && <button type="button" onClick={onFix} className={styles.secondary}>Adjust cutout</button>}
           {(state.status === 'failed' || (!onFix && state.status === 'done')) && <button type="button" onClick={onRedo} className={styles.secondary}><Icon name="refresh" width="14" height="14" />{state.status === 'failed' ? 'Try again' : 'Make again'}</button>}
-          {onAnimate && state.status === 'done' && state.image && animation?.status !== 'working' && animation?.status !== 'ready' && <button type="button" onClick={onAnimate} className={styles.secondary}><Icon name="play" width="14" height="14" />{animation?.status === 'failed' ? 'Animate again' : 'Animate'}</button>}
+          {onAnimate && state.status === 'done' && state.image && !verify && animation?.status !== 'working' && animation?.status !== 'ready' && <button type="button" onClick={onAnimate} className={styles.secondary}><Icon name="play" width="14" height="14" />{animation?.status === 'failed' ? 'Animate again' : 'Animate'}</button>}
         </div>
+        {onAnimate && verify && (
+          <div className={styles.verifyBox} role="group" aria-label="Verify to animate">
+            <p>One quick check — each video uses paid GPU time.</p>
+            {verify.siteKey ? <div ref={verify.box} className={styles.verifyWidget} /> : <p role="status">Photo verification is not available right now.</p>}
+            <button type="button" onClick={verify.onCancel} className={styles.secondary}>Cancel</button>
+          </div>
+        )}
         {animation?.status === 'working' && <p role="status" className={styles.animating}><span className={styles.workingDot} />Animating this scene… takes a minute or two.</p>}
         {animation?.status === 'failed' && animation.error && <p className={styles.error}>{animation.error}</p>}
         {animation?.status === 'ready' && animation.video && (

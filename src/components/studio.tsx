@@ -77,7 +77,6 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   const turnstileId = useRef<TurnstileId | null>(null);
   const animateContainer = useRef<HTMLDivElement>(null);
   const animateWidgetId = useRef<TurnstileId | null>(null);
-  const animatePanel = useRef<HTMLDivElement>(null);
   const planRef = useRef<Plan | null>(null);
   const shootCreatedAt = useRef(0);
   const recorder = useRef(new Recorder());
@@ -184,7 +183,6 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   useEffect(() => {
     if (!animateAsk || !turnstileEnabled || !turnstileSiteKey || !turnstileReady || !animateContainer.current || !window.turnstile) return;
     const shot = animateAsk;
-    animatePanel.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     animateWidgetId.current = window.turnstile.render(animateContainer.current, {
       sitekey: turnstileSiteKey,
       action: 'animate',
@@ -517,6 +515,12 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
           <img src="/brand/hubog-lockup-dark-240.png" alt="" width="240" height="73" className={`${styles.brandLogo} ${styles.brandLogoDark}`} aria-hidden="true" />
           <span className={styles.shootDescriptor} aria-hidden="true">shoot<svg viewBox="0 0 72 34" preserveAspectRatio="none" aria-hidden="true"><path d="M1 9V2a1 1 0 0 1 1-1h7m54 0h7a1 1 0 0 1 1 1v7M1 25v7a1 1 0 0 0 1 1h7m54 0h7a1 1 0 0 0 1-1v-7" /></svg></span>
         </div>
+        <button type="button" className={styles.themeToggle} onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+          <Icon name={theme === 'dark' ? 'sun' : 'moon'} width="18" height="18" />
+        </button>
+      </header>
+
+      <main id="studio" className={styles.main}>
         <ol className={styles.steps} aria-label="Your progress">
           {['Add a photo', 'Make photos', 'Download'].map((label, i) => (
             <li key={label} className={`${styles.step} ${i === currentStep ? styles.currentStep : ''} ${i < currentStep ? styles.completedStep : ''}`} aria-current={i === currentStep ? 'step' : undefined}>
@@ -525,13 +529,6 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
             </li>
           ))}
         </ol>
-        <span className={styles.headerNote}>Product photos for your shop.</span>
-        <button type="button" className={styles.themeToggle} onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
-          <Icon name={theme === 'dark' ? 'sun' : 'moon'} width="18" height="18" />
-        </button>
-      </header>
-
-      <main id="studio" className={styles.main}>
         <div className={styles.intro}>
           <h1>{stage === 'results' ? settled ? readyCount > 0 ? 'Your photos are ready.' : 'The shoot is finished.' : 'Your shoot is underway.' : <>Start with a photo<br />of your product.</>}</h1>
           <p>{stage === 'results' ? 'Download each photo as it’s ready. Your listing text is here too.' : 'Make product photos, captions, and listing text for your shop.'}</p>
@@ -641,14 +638,6 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
               </div>
             </section>
 
-            {animateAsk && (
-              <div ref={animatePanel} className={styles.animateVerify} role="group" aria-label="Verify to animate">
-                <p>One quick check to animate <strong>{animateAsk.title}</strong> — each video uses paid GPU time.</p>
-                {turnstileSiteKey ? <div ref={animateContainer} className={styles.turnstileWidget} /> : <p role="status">Photo verification is not available right now.</p>}
-                <button type="button" onClick={() => setAnimateAsk(null)} className={styles.animateCancel}>Cancel</button>
-              </div>
-            )}
-
             <div className={styles.resultsLayout}>
               <section className={styles.gallery} aria-label="Your photos">
                 <div className={styles.sectionHeading}><h2>Your photos</h2><span role="status">{readyCount} of {plan.shots.length} ready</span></div>
@@ -686,6 +675,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                         else void animateOne(plan, shot);
                       }}
                       animation={anims[shot.id]}
+                      verify={animateAsk?.id === shot.id ? { box: animateContainer, siteKey: turnstileSiteKey, onCancel: () => setAnimateAsk(null) } : undefined}
                     />
                   ))}
                 </div>
