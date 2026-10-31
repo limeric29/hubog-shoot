@@ -45,7 +45,7 @@ npm run dev                  # http://localhost:3000
 
 Model IDs are read from server environment variables. The defaults are `muse-spark-1.3`, `muse-image-1.0`, `sam-3.1`, and `muse-voice-transcribe-1.0`; change `MUSE_SPARK_MODEL`, `MUSE_IMAGE_MODEL`, `SAM_MODEL`, or `MUSE_VOICE_TRANSCRIBE_MODEL` in `.env.local` or `wrangler.jsonc`. `META_API_BASE_URL` can point to another compatible endpoint. If the selected models have different rates, update the `*_USD_*` pricing variables too so the spend log and cap stay accurate.
 
-Muse Spark (shot planning and photo checks) can run on a separate endpoint: set `MUSE_SPARK_BASE_URL` (e.g. `https://inference.baseten.co/v1` for Baseten's `meta-models/muse-spark-open-1026`) and `MUSE_SPARK_API_KEY`. Spark usage is then billed to that endpoint, not Meta, so it doesn't count toward `SPEND_CAP_USD`. Production runs Spark on Baseten; image, segmentation, and transcription stay on the Meta Model API.
+Muse Spark (shot planning and photo checks) can run on a separate endpoint: set `MUSE_SPARK_BASE_URL` (e.g. `https://inference.baseten.co/v1` for Baseten's `meta-models/muse-spark-open-1026`) and `MUSE_SPARK_API_KEY`. Spark usage is then billed to that endpoint, not Meta, so it doesn't count toward `SPEND_CAP_USD`. Production runs everything on the Meta Model API.
 
 Turnstile is off during development and on in production. Set `TURNSTILE_ENABLED=false` locally to disable it; the production Worker config enables it for `shoot.hubog.app`.
 
@@ -57,8 +57,8 @@ The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cl
 npm run cf:build
 npx wrangler deploy --secrets-file <file containing MODEL_API_KEY=...>   # first deploy only; delete the file after
 npx wrangler secret put MODEL_API_KEY                                    # later changes to the key
-npx wrangler secret put MUSE_SPARK_API_KEY                                # Baseten key for Spark calls
 npx wrangler secret put TURNSTILE_SECRET
+# npx wrangler secret put MUSE_SPARK_API_KEY                             # only if Spark is routed away (see above)
 npm run cf:deploy                                                        # later deploys
 ```
 
