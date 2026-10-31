@@ -66,6 +66,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   const [turnstileReady, setTurnstileReady] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [turnstileError, setTurnstileError] = useState('');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [history, setHistory] = useState<ShootHistoryItem[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyMessage, setHistoryMessage] = useState('');
@@ -79,6 +80,35 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
   const hasPlanQuestion = Boolean(plan?.question);
   const showTurnstile = turnstileEnabled && (stage !== 'results' || hasPlanQuestion);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    let preference: string | null = null;
+    try {
+      preference = window.localStorage.getItem('hubog-shoot-theme');
+    } catch {
+      // Keep the system preference when local storage is unavailable.
+    }
+    if (preference === 'light' || preference === 'dark') {
+      root.dataset.theme = preference;
+      setTheme(preference);
+    } else {
+      delete root.dataset.theme;
+      setTheme(media.matches ? 'dark' : 'light');
+    }
+    const followSystem = (event: MediaQueryListEvent) => {
+      let saved: string | null = null;
+      try {
+        saved = window.localStorage.getItem('hubog-shoot-theme');
+      } catch {
+        // The current tab can still follow system changes without storage.
+      }
+      if (saved !== 'light' && saved !== 'dark') setTheme(event.matches ? 'dark' : 'light');
+    };
+    media.addEventListener('change', followSystem);
+    return () => media.removeEventListener('change', followSystem);
+  }, []);
 
   useEffect(() => {
     void listShoots().then(setHistory).catch(() => setHistoryMessage('Shoot history is unavailable in this browser.'));
@@ -143,6 +173,17 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   }, [showTurnstile, stage, hasPlanQuestion, turnstileReady, turnstileSiteKey]);
 
   const patch = (id: string, next: Partial<ShotState>) => setShots((all) => ({ ...all, [id]: { ...all[id], ...next } }));
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try {
+      window.localStorage.setItem('hubog-shoot-theme', next);
+    } catch {
+      // The selection stays active for this tab if storage is unavailable.
+    }
+    setTheme(next);
+  }
 
   async function onFile(file?: File) {
     if (!file) return;
@@ -418,6 +459,9 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
           ))}
         </ol>
         <span className={styles.headerNote}>Product photos for your shop.</span>
+        <button type="button" className={styles.themeToggle} onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+          <Icon name={theme === 'dark' ? 'sun' : 'moon'} width="18" height="18" />
+        </button>
       </header>
 
       <main id="studio" className={styles.main}>
