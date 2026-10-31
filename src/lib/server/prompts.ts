@@ -120,6 +120,11 @@ export function scenePrompt(shot: Shot) {
   return `A photorealistic photo of an empty scene: ${shot.backdrop || shot.scene}. Leave the product itself out, and anything that looks like it. Keep a clear, flat, empty surface in the lower centre of the frame with nothing standing on it, where an object can be placed afterwards. No people, no text, no watermark.${space} The frame is cropped slightly afterwards.`;
 }
 
+export function animatePrompt(product: { name: string; label: string }, shot: { scene: string; backdrop: string }) {
+  const label = product.label ? ` The product label reads "${product.label}".` : '';
+  return `Animate this product photo into a short, smooth video clip. Product: ${product.name}.${label} Scene: ${shot.scene || shot.backdrop}. Move the surroundings gently — light, leaves, cloth, drifting particles — while the product itself stays exactly the same: same shape, colours, label and lettering, fully in frame throughout.`;
+}
+
 export function shootPrompt(product: Product, shot: Shot, problems: string[] = []) {
   const fix = problems.length
     ? `\nThe last attempt was rejected because: ${problems.join('; ')}. Fix exactly that, and copy the product from the real photo more closely.`

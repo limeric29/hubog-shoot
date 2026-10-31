@@ -2,13 +2,13 @@
 
 import Script from 'next/script';
 import { useEffect, useRef, useState } from 'react';
-import { api, transcribe } from '@/lib/client/api';
+import { api, apiGet, transcribe } from '@/lib/client/api';
 import { cutout, fitShot, loadPhoto, onWhite, placeOnScene, type Photo } from '@/lib/client/image';
 import { Recorder } from '@/lib/client/voice';
 import { dataUrlBytes, zip } from '@/lib/client/zip';
 import type { Mask, Plan, Shot, Verdict } from '@/lib/types';
 import { FixCutout } from './fix-cutout';
-import { ShotCard, type ShotState } from './shot-card';
+import { ShotCard, type AnimationState, type ShotState } from './shot-card';
 import { Icon } from './icon';
 import { PackPreview } from './pack-preview';
 import { deleteShoot, getShoot, listShoots, saveShoot, type ShootHistoryItem } from '@/lib/client/shoot-history';
@@ -22,12 +22,13 @@ type Turnstile = {
   render: (container: HTMLElement, options: {
     sitekey: string;
     action: string;
-    size?: 'normal' | 'flexible' | 'compact';
+    size?: 'normal' | 'flexible' | 'compact' | 'invisible';
     callback: (token: string) => void;
     'expired-callback'?: () => void;
     'error-callback'?: () => void;
   }) => TurnstileId;
   reset: (id: TurnstileId) => void;
+  execute: (id: TurnstileId) => void;
   remove?: (id: TurnstileId) => void;
 };
 
@@ -58,6 +59,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   const [error, setError] = useState('');
   const [plan, setPlan] = useState<Plan | null>(null);
   const [shots, setShots] = useState<Record<string, ShotState>>({});
+  const [anims, setAnims] = useState<Record<string, AnimationState>>({});
   const [mask, setMask] = useState<Mask | null>(null);
   const [fixing, setFixing] = useState(false);
   const [answer, setAnswer] = useState('');
@@ -173,6 +175,68 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   }, [showTurnstile, stage, hasPlanQuestion, turnstileReady, turnstileSiteKey]);
 
   const patch = (id: string, next: Partial<ShotState>) => setShots((all) => ({ ...all, [id]: { ...all[id], ...next } }));
+  const patchAnim = (id: string, next: AnimationState) => setAnims((all) => ({ ...all, [id]: next }));
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  // One invisible Turnstile solve per animation: each GPU video costs a fresh
+  // human verification, so a stockpiled session can't mint videos in a loop.
+  function solveAnimateChallenge(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const t = window.turnstile;
+      if (!t || !turnstileSiteKey) {
+        reject(new Error('Verification could not load. Refresh the page and try again.'));
+        return;
+      }
+      const el = document.createElement('div');
+      document.body.appendChild(el);
+      let settled = false;
+      const done = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        try { t.remove?.(id); } catch { /* already gone */ }
+        el.remove();
+        fn();
+      };
+      const timer = window.setTimeout(() => done(() => reject(new Error('Verification timed out. Please try again.'))), 120_000);
+      const id = t.render(el, {
+        sitekey: turnstileSiteKey,
+        action: 'animate',
+        size: 'invisible',
+        callback: (token) => done(() => resolve(token)),
+        'expired-callback': () => done(() => reject(new Error('Verification expired. Please try again.'))),
+        'error-callback': () => done(() => reject(new Error('Verification could not load. Refresh the page and try again.'))),
+      });
+      t.execute(id);
+    });
+  }
+
+  async function animateOne(pl: Plan, shot: Shot) {
+    const image = shots[shot.id]?.image;
+    if (!image || anims[shot.id]?.status === 'working') return;
+    patchAnim(shot.id, { status: 'working' });
+    try {
+      const turnstileToken = turnstileEnabled ? await solveAnimateChallenge() : undefined;
+      const { call_id } = await api<{ call_id: string }>('/api/animate', {
+        image,
+        product: { name: pl.product.name, label_text: pl.product.label_text },
+        shot: { aspect: shot.aspect, scene: shot.scene, backdrop: shot.backdrop },
+        turnstileToken,
+      });
+      for (let i = 0; i < 60; i++) {
+        await sleep(10000);
+        const st = await apiGet<{ status: string; message?: string }>(`/api/animate/${call_id}`);
+        if (st.status === 'done') {
+          patchAnim(shot.id, { status: 'ready', video: `/api/animate/${call_id}/video` });
+          return;
+        }
+        if (st.status === 'error') throw new Error(st.message || 'The animation failed. Please try again.');
+      }
+      throw new Error('The animation is taking too long. Please try again later.');
+    } catch (err) {
+      patchAnim(shot.id, { status: 'failed', error: message(err) });
+    }
+  }
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -607,6 +671,8 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                       state={shots[shot.id] ?? { status: 'queued' }}
                       fileName={slug(plan.product.name)}
                       onRedo={() => void shootOne(photo, plan, shot, brief)}
+                      onAnimate={() => void animateOne(plan, shot)}
+                      animation={anims[shot.id]}
                     />
                   ))}
                 </div>

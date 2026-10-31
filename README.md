@@ -49,6 +49,8 @@ Muse Spark (shot planning and photo checks) can run on a separate endpoint: set 
 
 Turnstile is off during development and on in production. Set `TURNSTILE_ENABLED=false` locally to disable it; the production Worker config enables it for `shoot.hubog.app`.
 
+Any finished scene can be animated into a 5-second video: `modal/animate.py` is a separate Modal app running LTX-2.5 (first-frame conditioned, with a generated ambience soundtrack) on a B300, exposed as start/status/result endpoints behind `ANIMATE_KEY`. Set `ANIMATE_URL` and `ANIMATE_KEY` (Worker secret in production) to enable the Animate button; without them the button still shows but reports the feature is not set up. Deploy or update it with `modal deploy modal/animate.py`.
+
 ## Deploy
 
 The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cloudflare). The Meta key is a Worker secret, never a file in the repo.

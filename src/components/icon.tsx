@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react';
 
-type IconName = 'camera' | 'upload' | 'mic' | 'stop' | 'check' | 'download' | 'copy' | 'refresh' | 'photo' | 'close' | 'sun' | 'moon';
+type IconName = 'camera' | 'upload' | 'mic' | 'stop' | 'check' | 'download' | 'copy' | 'refresh' | 'photo' | 'close' | 'sun' | 'moon' | 'play';
 
 const paths: Record<IconName, React.ReactNode> = {
   camera: <><path d="M8 6 9.5 3.5h5L16 6h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" /><circle cx="12" cy="12.5" r="4" /></>,
@@ -15,6 +15,7 @@ const paths: Record<IconName, React.ReactNode> = {
   close: <path d="m6 6 12 12M6 18 18 6" />,
   sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></>,
   moon: <path d="M20.9 13A8.5 8.5 0 0 1 11 3.1 8.5 8.5 0 1 0 20.9 13Z" />,
+  play: <path d="M8 5v14l11-7Z" />,
 };
 
 export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconName }) {

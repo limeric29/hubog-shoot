@@ -33,7 +33,13 @@ const LABEL: Record<ShotStatus, string> = {
 
 const PLATFORM = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok Shop', facebook: 'Facebook' } as const;
 
-export function ShotCard({ shot, state, fileName, onRedo, onFix }: { shot: Shot; state: ShotState; fileName: string; onRedo: () => void; onFix?: () => void }) {
+export interface AnimationState {
+  status: 'working' | 'ready' | 'failed';
+  video?: string;
+  error?: string;
+}
+
+export function ShotCard({ shot, state, fileName, onRedo, onFix, onAnimate, animation }: { shot: Shot; state: ShotState; fileName: string; onRedo: () => void; onFix?: () => void; onAnimate?: () => void; animation?: AnimationState }) {
   const busy = state.status === 'queued' || state.status === 'shooting' || state.status === 'checking' || state.status === 'redoing';
   return (
     <article className={styles.card} aria-label={shot.title}>
@@ -76,7 +82,16 @@ export function ShotCard({ shot, state, fileName, onRedo, onFix }: { shot: Shot;
           {state.status === 'done' && state.image && <a href={state.image} download={`${fileName}-${shot.id}.jpg`} className={styles.download}><Icon name="download" width="15" height="15" />Download</a>}
           {onFix && state.status === 'done' && <button type="button" onClick={onFix} className={styles.secondary}>Adjust cutout</button>}
           {(state.status === 'failed' || (!onFix && state.status === 'done')) && <button type="button" onClick={onRedo} className={styles.secondary}><Icon name="refresh" width="14" height="14" />{state.status === 'failed' ? 'Try again' : 'Make again'}</button>}
+          {onAnimate && state.status === 'done' && state.image && animation?.status !== 'working' && animation?.status !== 'ready' && <button type="button" onClick={onAnimate} className={styles.secondary}><Icon name="play" width="14" height="14" />{animation?.status === 'failed' ? 'Animate again' : 'Animate'}</button>}
         </div>
+        {animation?.status === 'working' && <p role="status" className={styles.animating}><span className={styles.workingDot} />Animating this scene… takes a minute or two.</p>}
+        {animation?.status === 'failed' && animation.error && <p className={styles.error}>{animation.error}</p>}
+        {animation?.status === 'ready' && animation.video && (
+          <div className={styles.videoWrap}>
+            <video src={animation.video} controls playsInline preload="metadata" className={styles.video} aria-label={`Animated ${shot.title}`} />
+            <a href={animation.video} download={`${fileName}-${shot.id}.mp4`} className={styles.download}><Icon name="download" width="15" height="15" />Download video</a>
+          </div>
+        )}
       </div>
     </article>
   );

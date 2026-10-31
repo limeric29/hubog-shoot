@@ -18,6 +18,7 @@
     // Stops every paid call once this instance has spent this much (USD). Set HUBOG_KILL to "1" to pause them all.
     "SPEND_CAP_USD": "40",
     "META_API_BASE_URL": "https://api.meta.ai/v1",
+    "ANIMATE_URL": "https://limeric29--hubog-shoot-animate-web.us-east.modal.run",
     "MUSE_SPARK_MODEL": "muse-spark-1.3",
     "MUSE_IMAGE_MODEL": "muse-image-1.0",
     "SAM_MODEL": "sam-3.1",

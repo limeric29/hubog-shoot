@@ -30,6 +30,9 @@
 .download:hover { background: var(--button-hover); }
 .secondary { color: var(--ink); background: var(--card); }
 .secondary:hover { background: var(--bg); }
+.animating { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--accent); font-size: 11px; font-weight: 600; line-height: 1.5; }
+.videoWrap { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.video { display: block; width: 100%; border-radius: 10px; background: #000; }
 
 @media (max-width: 540px) {
   .photoMat { aspect-ratio: 1 / 1.05; padding: 16px; }
