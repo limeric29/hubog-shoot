@@ -29,6 +29,7 @@ async function pool<T>(items: T[], size: number, fn: (item: T) => Promise<void>)
 
 export function Studio() {
   const [photo, setPhoto] = useState<Photo | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
   const [brief, setBrief] = useState('');
   const [stage, setStage] = useState<Stage>('brief');
   const [mic, setMic] = useState<Mic>('idle');
@@ -49,10 +50,13 @@ export function Studio() {
   async function onFile(file?: File) {
     if (!file) return;
     setError('');
+    setPhotoLoading(true);
     try {
       setPhoto(await loadPhoto(file));
     } catch (err) {
       setError(message(err));
+    } finally {
+      setPhotoLoading(false);
     }
   }
 
@@ -272,21 +276,21 @@ export function Studio() {
                 <h2>Your product photo</h2>
                 {photo && <span className={styles.added}><Icon name="check" width="14" height="14" /> Added</span>}
               </div>
-              <label className={`${styles.upload} ${photo ? styles.uploadFilled : ''}`}>
-                <input type="file" accept="image/*" className="sr-only" disabled={stage === 'planning'} aria-label={photo ? 'Change product photo' : 'Choose a product photo'} onChange={(e) => { void onFile(e.target.files?.[0]); e.target.value = ''; }} />
+              <label className={`${styles.upload} ${photo ? styles.uploadFilled : ''}`} aria-busy={photoLoading}>
+                <input type="file" accept="image/*,.heic,.heif" className="sr-only" disabled={stage === 'planning' || photoLoading} aria-label={photo ? 'Change product photo' : 'Choose a product photo'} onChange={(e) => { void onFile(e.target.files?.[0]); e.target.value = ''; }} />
                 {photo ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={photo.url} alt="Your product" className={styles.uploadedPhoto} />
-                    <span className={styles.changePhoto}><Icon name="photo" width="16" height="16" /> Change photo</span>
+                    <span className={styles.changePhoto}>{photoLoading ? <span className={styles.spinner} /> : <Icon name="photo" width="16" height="16" />}{photoLoading ? 'Preparing photo…' : 'Change photo'}</span>
                   </>
                 ) : (
                   <>
-                    <span className={styles.uploadIcon}><Icon name="upload" width="25" height="25" /></span>
-                    <strong>Take or choose a photo</strong>
+                    <span className={styles.uploadIcon}>{photoLoading ? <span className={styles.spinner} /> : <Icon name="upload" width="25" height="25" />}</span>
+                    <strong>{photoLoading ? 'Preparing your photo…' : 'Take or choose a photo'}</strong>
                     <span className={styles.uploadHint}>Your phone camera is a great place to start.</span>
-                    <span className={styles.choosePhoto}>Choose a photo</span>
-                    <span className={styles.fileTypes}>Try a clear photo with the whole product in frame.</span>
+                    {!photoLoading && <span className={styles.choosePhoto}>Choose a photo</span>}
+                    <span className={styles.fileTypes}>Use a clear photo showing the whole product. JPG, PNG, WebP, HEIC, or HEIF.</span>
                   </>
                 )}
               </label>
@@ -305,7 +309,7 @@ export function Studio() {
               <p id="brief-help" className={styles.helper} role="status">
                 {mic === 'recording' ? 'Listening. Tap stop when you are done.' : mic === 'transcribing' ? 'Writing down what you said…' : 'Type or use your voice. English, Filipino, or Taglish.'}
               </p>
-              <button type="button" disabled={!photo || stage === 'planning' || mic !== 'idle'} onClick={() => void start()} className={styles.primaryButton}>
+              <button type="button" disabled={!photo || photoLoading || stage === 'planning' || mic !== 'idle'} onClick={() => void start()} className={styles.primaryButton}>
                 {stage === 'planning' ? <span className={styles.spinner} /> : <Icon name="camera" />}
                 {stage === 'planning' ? 'Planning your shoot…' : 'Make my photos'}
               </button>

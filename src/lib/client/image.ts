@@ -25,6 +25,29 @@ function canvas(width: number, height: number) {
   return { c, ctx };
 }
 
+async function isHeifFile(file: File) {
+  if (/heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name)) return true;
+  if (file.size < 12) return false;
+  const brand = new TextDecoder().decode(await file.slice(8, 12).arrayBuffer()).trim().toLowerCase();
+  return ['heic', 'heix', 'hevc', 'hevx', 'heif', 'mif1', 'msf1'].includes(brand);
+}
+
+function imageFromBlob(blob: Blob): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(blob);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Image could not be decoded.'));
+    };
+    img.src = url;
+  });
+}
+
 export function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -35,21 +58,48 @@ export function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 export async function loadPhoto(file: File): Promise<Photo> {
-  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => {
-    throw new Error('That file is not a photo this browser can open. Try a JPEG or PNG.');
-  });
+  let bmp: ImageBitmap | HTMLImageElement;
+  try {
+    if (typeof createImageBitmap !== 'function') throw new Error('ImageBitmap is not supported.');
+    bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    if (await isHeifFile(file)) {
+      try {
+        // Load the WebAssembly decoder only when the browser cannot decode the HEIC itself.
+        const { heicTo } = await import('heic-to');
+        const jpeg = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.98 });
+        bmp = await imageFromBlob(jpeg);
+      } catch {
+        throw new Error('This HEIC/HEIF photo could not be opened. Try sharing it as a JPEG from Photos.');
+      }
+    } else {
+      try {
+        // Older mobile browsers may not implement createImageBitmap for regular photos either.
+        bmp = await imageFromBlob(file);
+      } catch {
+        throw new Error('This photo format could not be opened. Try a JPEG, PNG, or WebP.');
+      }
+    }
+  }
+
+  const sourceWidth = bmp instanceof HTMLImageElement ? bmp.naturalWidth : bmp.width;
+  const sourceHeight = bmp instanceof HTMLImageElement ? bmp.naturalHeight : bmp.height;
+  if (!sourceWidth || !sourceHeight) throw new Error('This photo has no readable image data. Try another photo.');
   const draw = (side: number, quality: number) => {
-    const k = Math.min(1, side / Math.max(bmp.width, bmp.height));
-    const w = Math.round(bmp.width * k);
-    const h = Math.round(bmp.height * k);
+    const k = Math.min(1, side / Math.max(sourceWidth, sourceHeight));
+    const w = Math.round(sourceWidth * k);
+    const h = Math.round(sourceHeight * k);
     const { c, ctx } = canvas(w, h);
     ctx.drawImage(bmp, 0, 0, w, h);
     return { url: c.toDataURL('image/jpeg', quality), width: w, height: h };
   };
-  const api = draw(API_SIDE, 0.88);
-  const hires = draw(HIRES_SIDE, 0.92);
-  bmp.close();
-  return { ...api, hires: hires.url, scale: hires.width / api.width };
+  try {
+    const api = draw(API_SIDE, 0.88);
+    const hires = draw(HIRES_SIDE, 0.92);
+    return { ...api, hires: hires.url, scale: hires.width / api.width };
+  } finally {
+    if ('close' in bmp && typeof bmp.close === 'function') bmp.close();
+  }
 }
 
 function drawHeadline(ctx: CanvasRenderingContext2D, w: number, h: number, text: string) {

@@ -16,7 +16,7 @@ The plan, the schedule and the rules checklist are in [docs/PLAN.md](docs/PLAN.m
 
 ## How it works
 
-1. **Brief.** One phone photo, plus a description typed or spoken in English, Filipino or Taglish.
+1. **Brief.** One phone photo, plus a description typed or spoken in English, Filipino or Taglish. JPEG, PNG, WebP, and HEIC/HEIF photos work; unsupported HEIC browsers convert the image on the device.
 2. **Plan.** Muse Spark reads the photo and plans five shots (main, two lifestyle scenes, a close-up, a vertical promo) as JSON, with captions and a listing in the seller's language.
 3. **Shoot.** Muse Image renders each scene with the seller's photo as the reference.
 4. **Check.** Muse Spark compares each shot with the real photo: same shape, colour and label text? A shot that changed the product is reshot once. If it fails again, the scene is regenerated empty and the seller's real cutout is placed in it.

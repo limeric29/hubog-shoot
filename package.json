@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@meta-sam/parser": "0.1.0",
+    "heic-to": "1.6.7",
     "next": "16.4.3",
     "openai": "7.45.0",
     "react": "19.3.0",
