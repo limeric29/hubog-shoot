@@ -261,6 +261,8 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     } catch (err) {
       if (!needAuth(err)) patchAnim(shot.id, { status: 'failed', error: message(err) });
       else patchAnim(shot.id, { status: 'failed', error: 'Create a free account to keep animating, then try this scene again.' });
+    } finally {
+      refreshMe();
     }
   }
 
