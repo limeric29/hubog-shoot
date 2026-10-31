@@ -1,4 +1,18 @@
 // Calls to this app's own API routes.
+export class ApiError extends Error {
+  code?: string;
+  status: number;
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export function apiCode(err: unknown): string | undefined {
+  return err instanceof ApiError ? err.code : undefined;
+}
+
 export async function api<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
     method: 'POST',
@@ -7,7 +21,7 @@ export async function api<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status}).`);
+  if (!res.ok) throw new ApiError(json.error ?? `Request failed (${res.status}).`, res.status, json.code);
   return json as T;
 }
 

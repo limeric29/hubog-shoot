@@ -3,6 +3,7 @@ import { animateStart } from '@/lib/server/animate';
 import { ANIMATE_DIRECTOR_SYSTEM, ANIMATE_MOTION_SCHEMA, animateDirectorText, animatePrompt } from '@/lib/server/prompts';
 import { sparkJson, sparkOpenConfigured } from '@/lib/server/meta';
 import { verifyShootSession, verifyTurnstile } from '@/lib/server/turnstile';
+import { clientIp, consumeAnim, consumeGlobalAnims, getAuthUser } from '@/lib/server/auth';
 import type { Aspect } from '@/lib/types';
 
 const ASPECTS: Aspect[] = ['1:1', '4:5', '9:16'];
@@ -19,6 +20,8 @@ export async function POST(req: Request) {
     const aspect = body.shot?.aspect as Aspect;
     if (!ASPECTS.includes(aspect)) throw new Error('aspect is not supported.');
     const sessionCookie = await verifyTurnstile(req, body.turnstileToken, 'animate');
+    await consumeAnim(await getAuthUser(req), clientIp(req));
+    await consumeGlobalAnims();
     const product = { name: text(body.product?.name, 'product.name', 200), label: text(body.product?.label_text, 'product.label_text', 300) };
     const shot = { scene: text(body.shot?.scene, 'shot.scene', 1200), backdrop: text(body.shot?.backdrop, 'shot.backdrop', 1200) };
     // Spark directs the motion from the actual frame: open weights first,

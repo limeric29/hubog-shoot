@@ -40,6 +40,8 @@ export class MetaError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Machine-readable reason the client can act on (e.g. NEED_REGISTER). */
+    readonly code?: string,
   ) {
     super(message);
   }

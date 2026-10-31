@@ -2,7 +2,8 @@
 
 import Script from 'next/script';
 import { useEffect, useRef, useState } from 'react';
-import { api, apiGet, transcribe } from '@/lib/client/api';
+import { api, apiCode, apiGet, transcribe } from '@/lib/client/api';
+import { AuthModal, fetchMe, quotaText, type Me } from './auth-modal';
 import { cutout, fitShot, loadPhoto, onWhite, placeOnScene, type Photo } from '@/lib/client/image';
 import { Recorder } from '@/lib/client/voice';
 import { dataUrlBytes, zip } from '@/lib/client/zip';
@@ -73,6 +74,9 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyMessage, setHistoryMessage] = useState('');
   const [activeShootId, setActiveShootId] = useState('');
+  const [me, setMe] = useState<Me | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authReason, setAuthReason] = useState('');
   const turnstileContainer = useRef<HTMLDivElement>(null);
   const turnstileId = useRef<TurnstileId | null>(null);
   const animateContainer = useRef<HTMLDivElement>(null);
@@ -117,7 +121,29 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
   useEffect(() => {
     void listShoots().then(setHistory).catch(() => setHistoryMessage('Shoot history is unavailable in this browser.'));
+    void fetchMe().then(setMe);
   }, []);
+
+  function refreshMe() {
+    void fetchMe().then((next) => { if (next) setMe(next); });
+  }
+
+  function needAuth(err: unknown) {
+    if (apiCode(err) !== 'NEED_REGISTER') return false;
+    setAuthReason(err instanceof Error ? err.message : '');
+    setAuthOpen(true);
+    return true;
+  }
+
+  async function logout() {
+    try {
+      await api('/api/auth/logout', {});
+    } catch {
+      // The session cookie is cleared by the server even on failure paths.
+    }
+    const next = await fetchMe();
+    if (next) setMe(next);
+  }
 
   useEffect(() => {
     if (stage !== 'results' || !activeShootId || !plan || !photo) return;
@@ -233,7 +259,8 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       }
       throw new Error('The animation is taking too long. Please try again later.');
     } catch (err) {
-      patchAnim(shot.id, { status: 'failed', error: message(err) });
+      if (!needAuth(err)) patchAnim(shot.id, { status: 'failed', error: message(err) });
+      else patchAnim(shot.id, { status: 'failed', error: 'Create a free account to keep animating, then try this scene again.' });
     }
   }
 
@@ -381,11 +408,13 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         (s) => shootOne(photo, p, s, brief),
       );
     } catch (err) {
-      setError(message(err));
+      if (needAuth(err)) setError('');
+      else setError(message(err));
       setActiveShootId('');
       setStage('brief');
     } finally {
       resetTurnstile();
+      refreshMe();
     }
   }
 
@@ -515,9 +544,19 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
           <img src="/brand/hubog-lockup-dark-240.png" alt="" width="240" height="73" className={`${styles.brandLogo} ${styles.brandLogoDark}`} aria-hidden="true" />
           <span className={styles.shootDescriptor} aria-hidden="true">shoot<svg viewBox="0 0 72 34" preserveAspectRatio="none" aria-hidden="true"><path d="M1 9V2a1 1 0 0 1 1-1h7m54 0h7a1 1 0 0 1 1 1v7M1 25v7a1 1 0 0 0 1 1h7m54 0h7a1 1 0 0 0 1-1v-7" /></svg></span>
         </div>
-        <button type="button" className={styles.themeToggle} onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
-          <Icon name={theme === 'dark' ? 'sun' : 'moon'} width="18" height="18" />
-        </button>
+        <div className={styles.headerActions}>
+          {me?.email ? (
+            <>
+              <span className={styles.account}>{me.email}</span>
+              <button type="button" className={styles.authButton} onClick={() => void logout()}>Sign out</button>
+            </>
+          ) : (
+            <button type="button" className={styles.authButton} onClick={() => { setAuthReason(''); setAuthOpen(true); }}>Sign in</button>
+          )}
+          <button type="button" className={styles.themeToggle} onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} width="18" height="18" />
+          </button>
+        </div>
       </header>
 
       <main id="studio" className={styles.main}>
@@ -529,6 +568,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
             </li>
           ))}
         </ol>
+        {me && <p className={styles.quotaLine} role="status">{quotaText(me)}{!me.email && <> · <button type="button" className={styles.quotaLink} onClick={() => { setAuthReason(''); setAuthOpen(true); }}>Create a free account for a daily quota</button></>}</p>}
         <div className={styles.intro}>
           <h1>{stage === 'results' ? settled ? readyCount > 0 ? 'Your photos are ready.' : 'The shoot is finished.' : 'Your shoot is underway.' : <>Start with a photo<br />of your product.</>}</h1>
           <p>{stage === 'results' ? 'Download each photo as it’s ready. Your listing text is here too.' : 'Make product photos, captions, and listing text for your shop.'}</p>

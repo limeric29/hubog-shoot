@@ -61,3 +61,12 @@ export interface Mask {
   bits: string;
   area: number;
 }
+
+export interface Quota {
+  registered: boolean;
+  shootsLeft: number;
+  animsLeft: number;
+  shootsLimit: number;
+  animsLimit: number;
+  window: 'trial' | 'day';
+}

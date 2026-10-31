@@ -12,6 +12,7 @@
   "workers_dev": true,
   "preview_urls": false,
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS", "run_worker_first": false },
+  "d1_databases": [{ "binding": "DB", "database_name": "hubog-shoot", "database_id": "96d04ed1-9e19-4518-947c-cfde0d5f0a87", "migrations_dir": "migrations" }],
   "upload_source_maps": true,
   "observability": { "enabled": true },
   "vars": {
