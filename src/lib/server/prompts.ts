@@ -3,18 +3,26 @@ import type { Product, Shot } from '../types';
 
 const str = { type: 'string' } as const;
 const strs = { type: 'array', items: str } as const;
+// Length hints for endpoints that read the schema without enforcing it.
+const desc = (description: string) => ({ type: 'string', description }) as const;
 
 export const PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: ['question', 'product', 'shots', 'listing'],
   properties: {
-    question: str,
+    question: desc('At most one follow-up question, empty when the brief is enough'),
     product: {
       type: 'object',
       additionalProperties: false,
       required: ['name', 'category', 'colors', 'label_text', 'sam_phrase'],
-      properties: { name: str, category: str, colors: strs, label_text: str, sam_phrase: str },
+      properties: {
+        name: desc('Product name under 200 characters'),
+        category: desc('Product category under 200 characters'),
+        colors: strs,
+        label_text: desc('Printed label text under 300 characters, empty if none'),
+        sam_phrase: desc('Short noun phrase naming the product for segmentation under 120 characters'),
+      },
     },
     shots: {
       type: 'array',
@@ -27,13 +35,13 @@ export const PLAN_SCHEMA = {
         properties: {
           id: str,
           kind: { type: 'string', enum: ['main', 'lifestyle', 'detail', 'promo'] },
-          title: str,
+          title: desc('Short shot title for the seller'),
           platform: { type: 'string', enum: ['shopee', 'lazada', 'tiktok', 'facebook'] },
           aspect: { type: 'string', enum: ['1:1', '4:5', '9:16'] },
-          scene: str,
-          backdrop: str,
-          headline: str,
-          caption: str,
+          scene: desc('Setting description in English under 1200 characters'),
+          backdrop: desc('Same setting without the product under 1200 characters, empty for the main shot'),
+          headline: desc('Punchy line of at most four words, empty if the shot stays clean'),
+          caption: desc('One short line to post with the image'),
         },
       },
     },
@@ -41,7 +49,11 @@ export const PLAN_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       required: ['title', 'description', 'hashtags'],
-      properties: { title: str, description: str, hashtags: strs },
+      properties: {
+        title: desc('Marketplace title under 90 characters'),
+        description: desc('Two to four short sentences of listing copy'),
+        hashtags: strs,
+      },
     },
   },
 } as const;
@@ -75,7 +87,11 @@ export const VERDICT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: ['pass', 'problems', 'seller_note'],
-  properties: { pass: { type: 'boolean' }, problems: strs, seller_note: str },
+  properties: {
+    pass: { type: 'boolean' },
+    problems: { type: 'array', items: desc('One short difference in English under 300 characters') },
+    seller_note: desc('One short sentence for the seller'),
+  },
 } as const;
 
 export const CHECK_SYSTEM = `You check generated product photos for an online seller. You get two images: first the seller's REAL product photo, then a GENERATED shot meant to show the same product. A listing must never show a product the seller does not have, so be strict about the product itself and relaxed about the surroundings.

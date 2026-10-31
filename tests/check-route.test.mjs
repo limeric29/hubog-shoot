@@ -21,7 +21,14 @@ function handlers() {
     MetaError: class extends Error {
       constructor(status, message) { super(message); this.status = status; }
     },
-    sparkJson: async (options) => { calls.push(options); return options.name === 'verdict' ? verdict : {}; },
+    sparkJson: async (options) => {
+      calls.push(options);
+      if (options.name === 'verdict') return verdict;
+      return {
+        question: '', product: {}, listing: {},
+        shots: [{ id: 'main', kind: 'main', title: '', platform: 'shopee', aspect: '1:1', scene: '', backdrop: '', headline: '', caption: '' }],
+      };
+    },
   };
   function load(file) {
     if (file === metaFile) return meta;

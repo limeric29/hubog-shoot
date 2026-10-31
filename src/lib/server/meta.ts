@@ -94,16 +94,19 @@ async function metaFetch(path: string, init: RequestInit, tries = 3, target?: { 
   }
 }
 
-// Direct parse first; fall back to fenced blocks for endpoints that accept a JSON
-// schema without enforcing it. Only inputs that failed before take the fallback.
-function parseJsonLoose(content: string): { ok: boolean; value?: unknown } {
-  try {
-    return { ok: true, value: JSON.parse(content) };
-  } catch {}
+// Direct parse first; fall back to fenced blocks, then to the outermost brace span,
+// for endpoints that accept a JSON schema without enforcing it. Only inputs that
+// failed before take a fallback, and JSON.parse still validates every candidate.
+export function parseJsonLoose(content: string): { ok: boolean; value?: unknown } {
+  const candidates: string[] = [content];
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) {
+  if (fenced) candidates.push(fenced[1]);
+  const start = content.indexOf('{');
+  const end = content.lastIndexOf('}');
+  if (start !== -1 && end > start) candidates.push(content.slice(start, end + 1));
+  for (const candidate of candidates) {
     try {
-      return { ok: true, value: JSON.parse(fenced[1]) };
+      return { ok: true, value: JSON.parse(candidate) };
     } catch {}
   }
   return { ok: false };
@@ -121,39 +124,46 @@ export async function sparkJson<T>(opts: {
   guard();
   const modelId = model('MUSE_SPARK_MODEL', 'muse-spark-1.3');
   const away = sparkRoutedAway();
-  const res = await metaFetch('/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: modelId,
-      messages: [
-        {
-          role: 'developer',
-          // Some OpenAI-compatible endpoints accept a JSON schema without enforcing it.
-          content: away ? `${opts.system}\n\nRespond with a single JSON object matching the requested schema, and nothing else. No code fences, no commentary.` : opts.system,
-        },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: opts.text },
-            ...(opts.images ?? []).map((url) => ({ type: 'image_url', image_url: { url } })),
-          ],
-        },
-      ],
-      response_format: { type: 'json_schema', json_schema: { name: opts.name, strict: true, schema: opts.schema } },
-      // Reasoning tokens count against this, so leave room for them. Reasoning
-      // endpoints think at length before answering, so they get more headroom.
-      max_completion_tokens: opts.maxTokens ?? (away ? 16000 : 6000),
-    }),
-  }, 3, away ? { base: sparkBaseUrl(), key: sparkApiKey(), label: 'Spark API' } : undefined);
-  const json = await res.json();
-  const u = json.usage ?? {};
-  book(modelId, away ? 0 : (u.prompt_tokens ?? 0) * PRICE.sparkIn + (u.completion_tokens ?? 0) * PRICE.sparkOut, `${u.prompt_tokens ?? 0} in / ${u.completion_tokens ?? 0} out`);
-  const content = json.choices?.[0]?.message?.content;
-  if (!content) throw new MetaError(502, 'Muse Spark returned no content.');
-  const parsed = parseJsonLoose(content);
-  if (!parsed.ok) throw new MetaError(502, 'Muse Spark returned JSON that does not parse.');
-  return parsed.value as T;
+  for (let attempt = 1; ; attempt++) {
+    const res = await metaFetch('/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [
+          {
+            role: 'developer',
+            // Some OpenAI-compatible endpoints accept a JSON schema without enforcing it.
+            content: away ? `${opts.system}\n\nRespond with a single JSON object matching the requested schema, and nothing else. No code fences, no commentary.` : opts.system,
+          },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: opts.text },
+              ...(opts.images ?? []).map((url) => ({ type: 'image_url', image_url: { url } })),
+            ],
+          },
+        ],
+        response_format: { type: 'json_schema', json_schema: { name: opts.name, strict: true, schema: opts.schema } },
+        // Reasoning tokens count against this, so leave room for them. Reasoning
+        // endpoints think at length before answering, so they get more headroom.
+        max_completion_tokens: opts.maxTokens ?? (away ? 16000 : 6000),
+      }),
+    }, 3, away ? { base: sparkBaseUrl(), key: sparkApiKey(), label: 'Spark API' } : undefined);
+    const json = await res.json();
+    const u = json.usage ?? {};
+    book(modelId, away ? 0 : (u.prompt_tokens ?? 0) * PRICE.sparkIn + (u.completion_tokens ?? 0) * PRICE.sparkOut, `${u.prompt_tokens ?? 0} in / ${u.completion_tokens ?? 0} out`);
+    const content = json.choices?.[0]?.message?.content;
+    // Empty replies are transient; retry once before failing the call.
+    if (!content && attempt < 2) continue;
+    if (!content) throw new MetaError(502, 'Muse Spark returned no content.');
+    const parsed = parseJsonLoose(content);
+    if (!parsed.ok) {
+      console.error(`[spark] unparsable model=${modelId} head=${JSON.stringify(content.slice(0, 400))}`);
+      throw new MetaError(502, 'Muse Spark returned JSON that does not parse.');
+    }
+    return parsed.value as T;
+  }
 }
 
 /** Muse Image through the Responses API, with the seller's photo as the reference when there is one. Returns a data URL. */

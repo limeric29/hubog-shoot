@@ -1,5 +1,5 @@
 import { handle, rateLimit, imageUrl, text } from '@/lib/server/http';
-import { sparkJson } from '@/lib/server/meta';
+import { MetaError, sparkJson } from '@/lib/server/meta';
 import { CHECK_SYSTEM, VERDICT_SCHEMA, checkText } from '@/lib/server/prompts';
 import { verifyShootSession } from '@/lib/server/turnstile';
 import type { Product, Verdict } from '@/lib/types';
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     // Existing clients send the full brief in `language`. Match /api/plan's limit;
     // checkText already keeps only a short excerpt for the model's language hint.
     const sellerWords = text(body.language, 'language', 2000);
-    return sparkJson<Verdict>({
+    const verdict = await sparkJson<Verdict>({
       system: CHECK_SYSTEM,
       text: checkText(product, sellerWords),
       images: [photo, image],
@@ -26,5 +26,17 @@ export async function POST(req: Request) {
       schema: VERDICT_SCHEMA,
       maxTokens: 3000,
     });
+    // The reshoot request validates each problem, so clamp them here instead of
+    // failing the retry on an overlong model string.
+    if (!verdict || typeof verdict !== 'object') {
+      throw new MetaError(502, 'The photo check came back empty. Please try again.');
+    }
+    return {
+      pass: verdict.pass === true,
+      problems: Array.isArray(verdict.problems)
+        ? verdict.problems.filter((p): p is string => typeof p === 'string').map((p) => p.slice(0, 300)).slice(0, 6)
+        : [],
+      seller_note: typeof verdict.seller_note === 'string' ? verdict.seller_note : '',
+    };
   });
 }
