@@ -24,7 +24,8 @@ export async function POST(req: Request) {
       images: [photo, image],
       name: 'verdict',
       schema: VERDICT_SCHEMA,
-      maxTokens: 3000,
+      // No cap here: reasoning Spark endpoints burn most of the budget thinking
+      // before they answer, and a small cap truncates the verdict to nothing.
     });
     // The reshoot request validates each problem, so clamp them here instead of
     // failing the retry on an overlong model string.

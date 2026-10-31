@@ -155,7 +155,10 @@ export async function sparkJson<T>(opts: {
     book(modelId, away ? 0 : (u.prompt_tokens ?? 0) * PRICE.sparkIn + (u.completion_tokens ?? 0) * PRICE.sparkOut, `${u.prompt_tokens ?? 0} in / ${u.completion_tokens ?? 0} out`);
     const content = json.choices?.[0]?.message?.content;
     // Empty replies are transient; retry once before failing the call.
-    if (!content && attempt < 2) continue;
+    if (!content) {
+      console.error(`[spark] empty model=${modelId} attempt=${attempt} finish=${json.choices?.[0]?.finish_reason ?? '?'} in=${u.prompt_tokens ?? '?'} out=${u.completion_tokens ?? '?'}`);
+      if (attempt < 2) continue;
+    }
     if (!content) throw new MetaError(502, 'Muse Spark returned no content.');
     const parsed = parseJsonLoose(content);
     if (!parsed.ok) {
