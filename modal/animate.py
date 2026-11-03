@@ -89,15 +89,16 @@ image = (
 
 web_image = modal.Image.debian_slim(python_version="3.12").uv_pip_install("fastapi[standard]")
 
-# Slim TTS image: the 2B VoxCPM2 voice model runs on a cheap T4, spawned in
+# Slim TTS image: the 2B VoxCPM2 voice model runs on a cheap L4, spawned in
 # parallel with the B300 video render instead of blocking it.
 tts_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_pip_install("torch==2.13.0", index_url=TORCH_INDEX)
     .uv_pip_install("voxcpm", "soundfile", "numpy")
-    .env({"HF_HUB_DISABLE_TELEMETRY": "1", "HF_HUB_CACHE": "/voxcpm/hf"})
+    .env({"HF_HUB_DISABLE_TELEMETRY": "1", "HF_HUB_CACHE": "/voxcpm/hf", "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
 )
-TTS_GPU = "T4"
+# L4: VoxCPM2's load spike OOMs a 16 GB T4; 24 GB is still ~10x cheaper than the B300.
+TTS_GPU = "L4"
 # Fixed seed so one voice description is one voice across a seller's scenes.
 TTS_SEED = 7
 
@@ -344,7 +345,7 @@ class Animator:
 def speak(job: dict) -> dict:
     """Speak the headline with the Spark-designed voice (VoxCPM2 voice design).
 
-    Cheap T4, spawned in parallel with the B300 video render. Weights persist
+    Cheap L4, spawned in parallel with the B300 video render. Weights persist
     on the weights-voxcpm2 Volume after the first download. Any failure
     returns no audio: the clip ships with ambience only.
     """
