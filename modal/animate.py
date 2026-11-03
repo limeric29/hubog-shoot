@@ -6,7 +6,7 @@ weights are downloaded. First-frame image conditioning animates the seller's
 chosen scene; the model also generates a matching ambience soundtrack.
 
 Endpoints (all need `Authorization: Bearer $ANIMATE_KEY`):
-  POST /start  {image_b64, prompt, aspect, duration_sec, camera, seed, headline?, voice_b64?} -> {call_id}
+  POST /start  {image_b64, prompt, aspect, duration_sec, camera, seed, headline?, voice_desc?} -> {call_id}
   GET  /status/{call_id} -> {status: running|done|error, ...}
   GET  /result/{call_id} -> the finished MP4 bytes
 
@@ -54,6 +54,7 @@ CAMERA_HINTS = {
 
 app = modal.App(APP_NAME)
 volume = modal.Volume.from_name("weights-ltx25", create_if_missing=False)
+tts_volume = modal.Volume.from_name("weights-voxcpm2", create_if_missing=True)
 
 TORCH_INDEX = "https://download.pytorch.org/whl/cu132"
 LTX_GIT = f"git+https://github.com/Lightricks/LTX-2.git@{LTX_COMMIT}#subdirectory=packages"
@@ -77,6 +78,8 @@ image = (
         "openimageio==3.1.18.1",
         "pillow",
         "numpy",
+        "voxcpm",
+        "soundfile",
     )
     # Upstream overrides torch's cuDNN 9.20, which aborts on the first cuDNN
     # SDPA call (see LTX-2's pyproject.toml).
@@ -193,7 +196,7 @@ def cover_fit(raw: bytes, width: int, height: int) -> str:
 @app.cls(
     image=image,
     gpu=GPU,
-    volumes={WEIGHTS_DIR: volume},
+    volumes={WEIGHTS_DIR: volume, "/voxcpm": tts_volume},
     cpu=16.0,
     timeout=900,
     # Cost-first scaling: nothing warm when idle, one GPU job at a time, and
@@ -278,14 +281,10 @@ class Animator:
         except Exception:
             raise ValueError("The scene photo could not be read. Try a JPEG or PNG.")
         headline = str(job.get("headline", "") or "")[:120]
+        voice_desc = str(job.get("voice_desc", "") or "")[:200]
         voice_path = None
-        if job.get("voice_b64"):
-            try:
-                with open("/tmp/voice.wav", "wb") as f:
-                    f.write(base64.b64decode(job["voice_b64"]))
-                voice_path = "/tmp/voice.wav"
-            except Exception:
-                raise ValueError("voice_b64 is not valid base64")
+        if headline and voice_desc:
+            voice_path = self._speak(voice_desc, headline)
         out = "/tmp/animated.mp4"
         mixed = "/tmp/animated.mixed.mp4"
         n_frames, has_audio = self._generate(prompt, int(job.get("seed", 1)), width, height, frames, [first], mixed)
@@ -328,6 +327,29 @@ def _web_app():
             return {"status": "running"}
         except Exception as e:
             return {"status": "error", "message": f"{type(e).__module__}.{type(e).__name__}: {e}"[:500]}
+        return {"status": "done", "frames": out["frames"], "fps": out["fps"],
+                "width": out["width"], "height": out["height"], "audio": out["audio"], "bytes": len(out["video"]),
+                "headline": out.get("headline", False), "voice": out.get("voice", False)}
+
+    @web.get("/result/{call_id}")
+    def result(call_id: str, _=Depends(check_key)):
+        try:
+            out = modal.FunctionCall.from_id(call_id).get(timeout=60)
+        except TimeoutError:
+            return JSONResponse({"error": "still running"}, status_code=425)
+        except Exception as e:
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"[:500]}, status_code=500)
+        return Response(content=out["video"], media_type="video/mp4",
+                        headers={"Content-Disposition": 'attachment; filename="animated-scene.mp4"'})
+
+    return web
+
+
+@app.function(image=web_image, secrets=[KEY_SECRET], timeout=120)
+@modal.asgi_app()
+def web():
+    return _web_app()
+ "error", "message": f"{type(e).__module__}.{type(e).__name__}: {e}"[:500]}
         return {"status": "done", "frames": out["frames"], "fps": out["fps"],
                 "width": out["width"], "height": out["height"], "audio": out["audio"], "bytes": len(out["video"]),
                 "headline": out.get("headline", False), "voice": out.get("voice", False)}

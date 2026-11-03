@@ -1,7 +1,6 @@
 import { handle, rateLimit, imageUrl, text } from '@/lib/server/http';
 import { animateStart } from '@/lib/server/animate';
-import { speak } from '@/lib/server/heygen';
-import { ANIMATE_DIRECTOR_SYSTEM, ANIMATE_MOTION_SCHEMA, animateDirectorText, animatePrompt } from '@/lib/server/prompts';
+import { ANIMATE_DIRECTOR_SYSTEM, ANIMATE_MOTION_SCHEMA, DEFAULT_VOICE, animateDirectorText, animatePrompt } from '@/lib/server/prompts';
 import { sparkJson, sparkOpenConfigured } from '@/lib/server/meta';
 import { verifyShootSession, verifyTurnstile } from '@/lib/server/turnstile';
 import { clientIp, consumeAnim, consumeGlobalAnims, getAuthUser } from '@/lib/server/auth';
@@ -34,9 +33,10 @@ export async function POST(req: Request) {
     // direction failure never blocks the animation.
     let motion: string | null = null;
     let camera = 'slow_push_in';
+    let voiceDesc: string | null = null;
     for (const open of sparkOpenConfigured() ? [true, false] : [false]) {
       try {
-        const dir = await sparkJson<{ motion?: unknown; camera?: unknown }>({
+        const dir = await sparkJson<{ motion?: unknown; camera?: unknown; voice?: unknown }>({
           system: ANIMATE_DIRECTOR_SYSTEM,
           text: animateDirectorText(product, shot),
           images: [image],
@@ -46,16 +46,17 @@ export async function POST(req: Request) {
         });
         if (typeof dir?.motion === 'string' && dir.motion.trim()) motion = dir.motion.trim().slice(0, 600);
         if (dir?.camera === 'static' || dir?.camera === 'drift' || dir?.camera === 'slow_push_in') camera = dir.camera;
+        if (typeof dir?.voice === 'string' && dir.voice.trim()) voiceDesc = dir.voice.trim().slice(0, 200);
         break;
       } catch (err) {
         console.error(`[animate] direction via ${open ? 'open weights' : '1.3'} failed:`, err instanceof Error ? err.message : err);
       }
     }
     const prompt = motion ?? animatePrompt(product, shot);
-    const voice = headline ? await speak(headline) : null;
     const call_id = await animateStart(image.replace(/^data:image\/\w+;base64,/, ''), prompt, aspect, camera, {
       ...(headline ? { headline } : {}),
-      ...(voice ? { voice_b64: voice.b64 } : {}),
+      // The designed voice always ships with a headline: VoxCPM2 speaks it on the GPU.
+      ...(headline ? { voice_desc: voiceDesc ?? DEFAULT_VOICE } : {}),
     });
     const response = Response.json({ call_id });
     if (sessionCookie) response.headers.append('Set-Cookie', sessionCookie);

@@ -30,8 +30,8 @@ async function modal(path: string, init?: RequestInit): Promise<Response> {
 export interface AnimateExtras {
   /** On-screen headline, composited animated in post so diffusion never touches text. */
   headline?: string;
-  /** Base64 voiceover WAV, mixed over the ambience. */
-  voice_b64?: string;
+  /** VoxCPM2 voice design the GPU speaks the headline with. */
+  voice_desc?: string;
 }
 
 export async function animateStart(imageB64: string, prompt: string, aspect: string, camera = 'slow_push_in', extras: AnimateExtras = {}): Promise<string> {

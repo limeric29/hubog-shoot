@@ -183,11 +183,19 @@ test('the start token is verified as an animate action and refreshes the session
 });
 
 test('the raw scene is animated and the headline is forwarded for post', async () => {
-  const { start, seen } = handlers(() => json({ call_id: 'fc-raw' }), {});
+  const sparkResult = { motion: 'Steam curls upward.', camera: 'drift', voice: 'bright market vendor, quick cheerful pace' };
+  const { start, seen } = handlers(() => json({ call_id: 'fc-raw' }), {}, undefined, sparkResult);
   const other = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABBJRU5ErkJggg==';
   const res = await start(post({ ...body, raw: other, headline: 'Freshly Squeezed Daily' }));
   assert.equal(res.status, 200);
   assert.equal(seen[0].body.image_b64, other.replace(/^data:image\/\w+;base64,/, ''));
   assert.equal(seen[0].body.headline, 'Freshly Squeezed Daily');
-  assert.equal(seen[0].body.voice_b64, undefined);
+  assert.equal(seen[0].body.voice_desc, 'bright market vendor, quick cheerful pace');
+});
+
+test('a missing designed voice falls back to the default voice', async () => {
+  const { start, seen } = handlers(() => json({ call_id: 'fc-voice-fb' }), {});
+  const res = await start(post({ ...body, headline: 'Freshly Squeezed Daily' }));
+  assert.equal(res.status, 200);
+  assert.ok(seen[0].body.voice_desc.length > 10);
 });

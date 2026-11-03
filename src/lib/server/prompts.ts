@@ -127,14 +127,20 @@ export const ANIMATE_MOTION_SCHEMA = {
   properties: {
     motion: desc('2-3 sentences of visual motion direction under 600 characters'),
     camera: { type: 'string', enum: ['slow_push_in', 'static', 'drift'], description: 'The camera move for the clip' },
+    voice: desc('Voice design under 200 characters: gender, age, tone and pace fitting this product'),
   },
 } as const;
+
+/** Fallback voice when the director has no voice idea: warm, unhurried, sells food. */
+export const DEFAULT_VOICE = 'warm woman in her 30s, friendly market-seller energy, clear unhurried pace';
 
 export const ANIMATE_DIRECTOR_SYSTEM = `You direct 5-second product video clips for online sellers. You get one image: the exact first frame. Write the motion for an image-to-video model.
 
 Hard rules: the product MUST stay pixel-identical — same shape, colours, label and lettering, fully in frame for all 5 seconds. Animate ONLY the surroundings and the camera. NEVER add people, hands, animals, new objects, or on-screen text. A single continuous take with no cuts.
 
-Describe 2-3 concrete moving elements you can actually see in the frame (steam, leaves, water, cloth, light flicker, drifting particles). Present tense, visual and concise, under 60 words. No preamble, no story, no quality adjectives.`;
+Describe 2-3 concrete moving elements you can actually see in the frame (steam, leaves, water, cloth, light flicker, drifting particles). Present tense, visual and concise, under 60 words. No preamble, no story, no quality adjectives.
+
+Also design the voiceover voice for this exact product and scene: gender, age, tone, emotion and pace in one short phrase, e.g. "warm woman in her 30s, bright market-vendor energy, quick cheerful pace". Match the product (food: appetizing and warm; skincare: soft and calm; tech: crisp and confident).`;
 
 export function animateDirectorText(product: { name: string; label: string }, shot: { scene: string; backdrop: string }) {
   const label = product.label ? ` Label reads "${product.label}".` : '';
