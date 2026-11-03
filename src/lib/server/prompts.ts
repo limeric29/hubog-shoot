@@ -128,7 +128,8 @@ export const ANIMATE_MOTION_SCHEMA = {
     motion: desc('2-3 sentences of visual motion direction under 600 characters'),
     camera: { type: 'string', enum: ['slow_push_in', 'static', 'drift'], description: 'The camera move for the clip' },
     voice: desc('Voice design under 200 characters: gender, age, tone and pace fitting this product'),
-    lang: desc('Headline language for the voiceover, e.g. English, Filipino, or Taglish (Filipino-English mix)'),
+    lang: desc('Spoken line language for the voiceover, e.g. English, Filipino, or Taglish (Filipino-English mix)'),
+    music: desc('Background music bed under 120 characters: mood and texture fitting this product, e.g. light cheerful acoustic bed'),
     title: {
       type: 'object',
       additionalProperties: false,
@@ -145,6 +146,9 @@ export const ANIMATE_MOTION_SCHEMA = {
 /** Fallback voice when the director has no voice idea: warm, unhurried, sells food. */
 export const DEFAULT_VOICE = 'warm woman in her 30s, friendly market-seller energy, clear unhurried pace';
 
+/** Fallback music bed when the director has no music idea: light, cheerful, stays under the voice. */
+export const DEFAULT_MUSIC = 'light cheerful background music bed';
+
 export const ANIMATE_DIRECTOR_SYSTEM = `You direct 5-second product video clips for online sellers. You get one image: the exact first frame. Write the motion for an image-to-video model.
 
 Hard rules: the product MUST stay pixel-identical — same shape, colours, label and lettering, fully in frame for all 5 seconds. Animate ONLY the surroundings and the camera. NEVER add people, hands, animals, new objects, or on-screen text. A single continuous take with no cuts.
@@ -152,6 +156,8 @@ Hard rules: the product MUST stay pixel-identical — same shape, colours, label
 Describe 2-3 concrete moving elements you can actually see in the frame (steam, leaves, water, cloth, light flicker, drifting particles). Present tense, visual and concise, under 60 words. No preamble, no story, no quality adjectives.
 
 Also design the voiceover voice for this exact product and scene: gender, age, tone, emotion and pace in one short phrase, e.g. "warm woman in her 30s, bright market-vendor energy, quick cheerful pace". Match the product (food: appetizing and warm; skincare: soft and calm; tech: crisp and confident) and the spoken line's language: read which language the caption is written in — English, Filipino, or Taglish mix — and design a matching voice (e.g. Filipina for Filipino). Report it in lang. LTX speaks the caption natively in this voice, so keep the design vivid but the words out — the line itself is fixed.
+
+Also pick the background music bed for this exact product and scene: mood and texture in a few words (e.g. "light cheerful acoustic bed"), matched to the product (food: warm and homey; kids: playful and bright; skincare: soft and airy; tech: clean and modern). It must sit quietly under the voiceover, never dramatic. Report it in music.
 
 Also style the on-screen headline. The still photo shows it at the top in white with a fade entrance — keep that default by omitting title unless the frame demands better: anchor center when the top is busy but the middle is clean, bottom when the product sits high; animation rise for calm scenes, slide for energetic ones; color black only over bright, clean backgrounds. Never cover the product.`;
 

@@ -40,7 +40,13 @@ GPU = "B300"
 WEIGHTS_DIR = "/weights"
 KEY_SECRET = modal.Secret.from_name("hubog-shoot-animate-key")
 
-AUDIO_LINE = "Sound: natural ambience and foley for the scene; no music."
+DEFAULT_MUSIC = "a light cheerful background music bed"
+
+
+def audio_line(job: dict) -> str:
+    """Ambience plus the director's music bed, kept under the voiceover."""
+    music = str(job.get("music", "") or "").strip()[:120] or DEFAULT_MUSIC
+    return f"Sound: natural ambience and foley for the scene, plus {music}."
 NO_TEXT_LINE = "No on-screen text, captions or logos."
 # LTX-2.5 cuts to new shots on cue, so product clips pin a single take.
 # Prompt shape follows Lightricks' guide (docs.ltx.io, prompting-guide):
@@ -332,7 +338,7 @@ class Animator:
         duration_sec = int(job.get("duration_sec", 5))
         frames = FRAMES.get(duration_sec, FRAMES[5])
         camera = CAMERA_HINTS.get(job.get("camera"), CAMERA_HINTS["slow_push_in"])
-        prompt = " ".join(x for x in (job.get("prompt", "").strip(), camera, TAKE_LINE, AUDIO_LINE, NO_TEXT_LINE) if x)
+        prompt = " ".join(x for x in (job.get("prompt", "").strip(), camera, TAKE_LINE, audio_line(job), NO_TEXT_LINE) if x)
         try:
             raw = base64.b64decode(job["image_b64"])
         except Exception:

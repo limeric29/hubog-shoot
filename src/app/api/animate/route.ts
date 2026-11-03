@@ -1,6 +1,6 @@
 import { handle, rateLimit, imageUrl, text } from '@/lib/server/http';
 import { animateStart } from '@/lib/server/animate';
-import { ANIMATE_DIRECTOR_SYSTEM, ANIMATE_MOTION_SCHEMA, DEFAULT_VOICE, animateDirectorText, animatePrompt } from '@/lib/server/prompts';
+import { ANIMATE_DIRECTOR_SYSTEM, ANIMATE_MOTION_SCHEMA, DEFAULT_MUSIC, DEFAULT_VOICE, animateDirectorText, animatePrompt } from '@/lib/server/prompts';
 import { sparkJson, sparkOpenConfigured } from '@/lib/server/meta';
 import { verifyShootSession, verifyTurnstile } from '@/lib/server/turnstile';
 import { clientIp, consumeAnim, consumeGlobalAnims, getAuthUser, isStaff } from '@/lib/server/auth';
@@ -65,10 +65,11 @@ export async function POST(req: Request) {
     let camera = 'slow_push_in';
     let voiceDesc: string | null = null;
     let voiceLang: string | null = null;
+    let musicDesc: string | null = null;
     let titleStyle: TitleStyle | null = null;
     for (const open of sparkOpenConfigured() ? [true, false] : [false]) {
       try {
-        const dir = await sparkJson<{ motion?: unknown; camera?: unknown; voice?: unknown; lang?: unknown; title?: unknown }>({
+        const dir = await sparkJson<{ motion?: unknown; camera?: unknown; voice?: unknown; lang?: unknown; music?: unknown; title?: unknown }>({
           system: ANIMATE_DIRECTOR_SYSTEM,
           text: animateDirectorText(product, shot, headline, caption),
           images: [image],
@@ -80,6 +81,7 @@ export async function POST(req: Request) {
         if (dir?.camera === 'static' || dir?.camera === 'drift' || dir?.camera === 'slow_push_in') camera = dir.camera;
         if (typeof dir?.voice === 'string' && dir.voice.trim()) voiceDesc = dir.voice.trim().slice(0, 200);
         if (typeof dir?.lang === 'string' && dir.lang.trim()) voiceLang = dir.lang.trim().slice(0, 40);
+        if (typeof dir?.music === 'string' && dir.music.trim()) musicDesc = dir.music.trim().slice(0, 120);
         titleStyle = readTitleStyle(dir?.title);
         break;
       } catch (err) {
@@ -99,6 +101,7 @@ export async function POST(req: Request) {
     const call_id = await animateStart(image.replace(/^data:image\/\w+;base64,/, ''), prompt, aspect, camera, {
       ...(headline ? { headline } : {}),
       ...(headline && titleStyle ? { title_style: titleStyle } : {}),
+      music: musicDesc ?? DEFAULT_MUSIC,
     });
     const response = Response.json({ call_id });
     if (sessionCookie) response.headers.append('Set-Cookie', sessionCookie);
