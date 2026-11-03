@@ -308,7 +308,9 @@ def cover_fit(raw: bytes, width: int, height: int) -> str:
     gpu=GPU,
     volumes={WEIGHTS_DIR: volume},
     cpu=16.0,
-    timeout=900,
+    # 25 min: headroom for a double cold start (B300 snapshot rebuild plus
+    # first A10G image pull); warm runs finish in ~5.
+    timeout=1500,
     # Cost-first scaling: nothing warm when idle, one GPU job at a time, and
     # the container exits 5 s after each job. Every animation pays a cold
     # start (~1 min to restore and warm up) instead of idle GPU time.
@@ -400,7 +402,7 @@ class Animator:
         voice_path = None
         if tts_call is not None:
             try:
-                wav_bytes = tts_call.get(timeout=540).get("wav")
+                wav_bytes = tts_call.get(timeout=1200).get("wav")
                 if wav_bytes:
                     with open("/tmp/voice.wav", "wb") as f:
                         f.write(wav_bytes)
@@ -418,7 +420,8 @@ class Animator:
                 "audio": has_audio or voice_path is not None, "headline": bool(headline), "voice": voice_path is not None}
 
 
-@app.function(image=tts_image, gpu=TTS_GPU, volumes={"/voxcpm": tts_volume}, timeout=600, min_containers=0, max_containers=2)
+@app.function(image=tts_image, gpu=TTS_GPU, volumes={"/voxcpm": tts_volume}, timeout=600, min_containers=0, max_containers=2,
+              scaledown_window=600)
 def speak(job: dict) -> dict:
     """Speak the headline with the Spark-designed voice (VoxCPM2 voice design).
 

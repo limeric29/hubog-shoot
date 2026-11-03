@@ -263,7 +263,8 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         shot: { aspect: shot.aspect, scene: shot.scene, backdrop: shot.backdrop },
         turnstileToken,
       });
-      for (let i = 0; i < 60; i++) {
+      // 20 minutes: covers a double cold start; warm runs finish in ~5.
+      for (let i = 0; i < 120; i++) {
         await sleep(10000);
         const st = await apiGet<{ status: string; message?: string }>(`/api/animate/${call_id}`);
         if (st.status === 'done') {
