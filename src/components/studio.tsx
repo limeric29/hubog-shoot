@@ -448,6 +448,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       setBrief(saved.brief);
       setPlan(saved.plan);
       setShots(saved.shots as Record<string, ShotState>);
+      setAnims(saved.anims ?? {});
       setMask(saved.mask);
       cutReady.current = saved.mask ? cutout(saved.photo, saved.mask).catch(() => null) : Promise.resolve(null);
       setActiveShootId(saved.id);
