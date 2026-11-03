@@ -253,12 +253,45 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
   const patch = (id: string, next: Partial<ShotState>) => setShots((all) => ({ ...all, [id]: { ...all[id], ...next } }));
   const patchAnim = (id: string, next: AnimationState) => setAnims((all) => ({ ...all, [id]: next }));
+  // Late results for an inactive shoot are written straight into that shoot's
+  // history entry (transient working states are dropped).
+  async function patchFor(shootId: string, id: string, next: Partial<ShotState>) {
+    if (shootId === activeShootIdRef.current) { patch(id, next); return; }
+    if (next.status !== 'done' && next.status !== 'failed') return;
+    try {
+      const saved = await getShoot(shootId);
+      if (!saved || !saved.shots[id]) return;
+      const status = next.status === 'done' ? ('done' as const) : ('failed' as const);
+      await saveShoot({
+        ...saved,
+        updatedAt: Date.now(),
+        shots: { ...saved.shots, [id]: { ...saved.shots[id], ...next, status } },
+      });
+      setHistory(await listShoots());
+    } catch { /* history unavailable; dropping a late result for an inactive shoot */ }
+  }
+  async function patchAnimFor(shootId: string, id: string, next: AnimationState) {
+    if (shootId === activeShootIdRef.current) { patchAnim(id, next); return; }
+    if (next.status !== 'ready' || !next.video) return;
+    try {
+      const saved = await getShoot(shootId);
+      if (!saved) return;
+      const inline = await videoToDataUrl(next.video);
+      if (!inline) return;
+      await saveShoot({
+        ...saved,
+        updatedAt: Date.now(),
+        anims: { ...(saved.anims ?? {}), [id]: { status: 'ready', video: inline } },
+      });
+      setHistory(await listShoots());
+    } catch { /* history unavailable; dropping a late result for an inactive shoot */ }
+  }
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   async function animateOne(pl: Plan, shot: Shot, turnstileToken?: string) {
     const image = shots[shot.id]?.image;
     const myShoot = activeShootId;
-    const guardAnim = (id: string, next: AnimationState) => { if (myShoot === activeShootIdRef.current) patchAnim(id, next); };
+    const guardAnim = (id: string, next: AnimationState) => { void patchAnimFor(myShoot, id, next); };
     if (!image || anims[shot.id]?.status === 'working') return;
     guardAnim(shot.id, { status: 'working' });
     try {
@@ -340,7 +373,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   /** Cuts the real product out of the photo and builds the white-background main image from it. */
   async function applyMask(p: Photo, m: Mask): Promise<HTMLCanvasElement> {
     const myShoot = activeShootId;
-    const guardPatch = (id: string, next: Partial<ShotState>) => { if (myShoot === activeShootIdRef.current) patch(id, next); };
+    const guardPatch = (id: string, next: Partial<ShotState>) => { void patchFor(myShoot, id, next); };
     const cut = await cutout(p, m);
     const url = onWhite(cut);
     setMask(m);
@@ -355,7 +388,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
   async function makeMain(p: Photo, pl: Plan) {
     const myShoot = activeShootId;
-    const guardPatch = (id: string, next: Partial<ShotState>) => { if (myShoot === activeShootIdRef.current) patch(id, next); };
+    const guardPatch = (id: string, next: Partial<ShotState>) => { void patchFor(myShoot, id, next); };
     guardPatch('main', { status: 'shooting' });
     cutReady.current = (async () => {
       try {
@@ -373,7 +406,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   async function shootOne(p: Photo, pl: Plan, shot: Shot, sellerWords: string) {
     let problems: string[] = [];
     const myShoot = activeShootId;
-    const guardPatch = (id: string, next: Partial<ShotState>) => { if (myShoot === activeShootIdRef.current) patch(id, next); };
+    const guardPatch = (id: string, next: Partial<ShotState>) => { void patchFor(myShoot, id, next); };
     const rejected: { image: string; note: string }[] = [];
     guardPatch(shot.id, { rejected: [], composite: false });
     try {
