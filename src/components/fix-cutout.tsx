@@ -8,14 +8,12 @@ import type { Mask } from '@/lib/types';
 interface Tap {
   x: number;
   y: number;
-  negative: boolean;
 }
 
-/** Tap the product to add to the cutout, or tap what doesn't belong to take it out. SAM 3.1 redraws after every tap. */
+/** Tap the product to outline it; undo a tap that grabs too much. SAM 3.1 redraws after every tap. */
 export function FixCutout({ photo, initial, fresh, onApply, onClose }: { photo: Photo; initial: Mask | null; fresh?: boolean; onApply: (mask: Mask) => void; onClose: () => void }) {
   const [taps, setTaps] = useState<Tap[]>([]);
   const [mask, setMask] = useState<Mask | null>(initial);
-  const [remove, setRemove] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const overlay = useRef<HTMLCanvasElement>(null);
@@ -24,27 +22,39 @@ export function FixCutout({ photo, initial, fresh, onApply, onClose }: { photo: 
     if (overlay.current) paintMask(overlay.current, mask);
   }, [mask]);
 
-  async function tap(e: React.PointerEvent<HTMLDivElement>) {
-    if (busy) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.max(0, Math.min(photo.width - 1, Math.floor(((e.clientX - rect.left) * photo.width) / rect.width)));
-    const y = Math.max(0, Math.min(photo.height - 1, Math.floor(((e.clientY - rect.top) * photo.height) / rect.height)));
-    const next = [...taps, { x, y, negative: remove }];
-    if (remove && !next.some((t) => !t.negative)) {
-      setError('Tap the product first with Keep selected, then erase around it.');
-      return;
-    }
-    setTaps(next);
+  async function segmentWith(next: Tap[]) {
     setBusy(true);
     setError('');
     try {
       setMask(await api<Mask>('/api/segment', { image: photo.url, width: photo.width, height: photo.height, points: next }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update the cutout.');
-      setTaps(taps);
+      return false;
     } finally {
       setBusy(false);
     }
+    return true;
+  }
+
+  async function tap(e: React.PointerEvent<HTMLDivElement>) {
+    if (busy) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(photo.width - 1, Math.floor(((e.clientX - rect.left) * photo.width) / rect.width)));
+    const y = Math.max(0, Math.min(photo.height - 1, Math.floor(((e.clientY - rect.top) * photo.height) / rect.height)));
+    const next = [...taps, { x, y }];
+    setTaps(next);
+    if (!(await segmentWith(next))) setTaps(taps);
+  }
+
+  async function undo() {
+    if (busy || taps.length === 0) return;
+    const next = taps.slice(0, -1);
+    setTaps(next);
+    if (next.length === 0) {
+      setMask(initial);
+      return;
+    }
+    if (!(await segmentWith(next))) setTaps(taps);
   }
 
   return (
@@ -52,7 +62,7 @@ export function FixCutout({ photo, initial, fresh, onApply, onClose }: { photo: 
       <div className="flex max-h-full w-full max-w-lg flex-col gap-3 overflow-auto rounded-t-2xl bg-[var(--card)] p-4 sm:rounded-2xl">
         <div>
           <h2 className="text-lg font-bold">{fresh ? 'Mark your product' : 'Adjust the product outline'}</h2>
-          <p className="text-sm text-[var(--muted)]">{fresh ? 'Tap the product to outline it. Choose Erase, then tap anything around it the outline grabs by mistake.' : 'Tap any part of the product that’s missing. Choose Erase, then tap anything outside the product.'}</p>
+          <p className="text-sm text-[var(--muted)]">{fresh ? 'Tap the product to outline it. Undo a tap that grabs too much.' : 'Tap any part of the product that’s missing. Undo a tap that grabs too much.'}</p>
         </div>
         <div className="relative touch-none select-none overflow-hidden rounded-xl border border-[var(--line)]" onPointerDown={tap} style={{ aspectRatio: `${photo.width} / ${photo.height}` }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -61,7 +71,7 @@ export function FixCutout({ photo, initial, fresh, onApply, onClose }: { photo: 
           {taps.map((t, i) => (
             <span
               key={i}
-              className={`pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ${t.negative ? 'bg-red-500' : 'bg-green-600'}`}
+              className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-green-600"
               style={{ left: `${(t.x / photo.width) * 100}%`, top: `${(t.y / photo.height) * 100}%` }}
             />
           ))}
@@ -69,11 +79,8 @@ export function FixCutout({ photo, initial, fresh, onApply, onClose }: { photo: 
         </div>
         {error && <p className="text-sm text-[var(--warn)]">{error}</p>}
         <div className="flex gap-2">
-          <button type="button" onClick={() => setRemove(false)} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${remove ? 'border-[var(--line)]' : 'border-green-700 bg-green-700 text-white'}`}>
-            Keep
-          </button>
-          <button type="button" onClick={() => setRemove(true)} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${remove ? 'border-red-600 bg-red-600 text-white' : 'border-[var(--line)]'}`}>
-            Erase
+          <button type="button" disabled={taps.length === 0 || busy} onClick={() => void undo()} className="flex-1 rounded-lg border border-[var(--line)] px-3 py-2 text-sm font-semibold disabled:opacity-50">
+            Undo
           </button>
           <button
             type="button"
