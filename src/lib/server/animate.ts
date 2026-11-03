@@ -32,6 +32,8 @@ export interface AnimateExtras {
   headline?: string;
   /** VoxCPM2 voice design the GPU speaks the headline with. */
   voice_desc?: string;
+  /** Director-chosen title styling; absent mirrors the still photo. */
+  title_style?: { anchor: string; animation: string; color: string };
 }
 
 export async function animateStart(imageB64: string, prompt: string, aspect: string, camera = 'slow_push_in', extras: AnimateExtras = {}): Promise<string> {

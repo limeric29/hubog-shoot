@@ -8,6 +8,26 @@ import type { Aspect } from '@/lib/types';
 
 const ASPECTS: Aspect[] = ['1:1', '4:5', '9:16'];
 
+interface TitleStyle {
+  anchor: 'top' | 'center' | 'bottom';
+  animation: 'fade' | 'rise' | 'slide';
+  color: 'white' | 'black';
+}
+
+/** Clamp the director's title styling to the animations Modal implements. */
+function readTitleStyle(value: unknown): TitleStyle | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const pick = <T extends string>(x: unknown, options: readonly T[], fallback: T): T =>
+    options.includes(x as T) ? (x as T) : fallback;
+  if (v.anchor === undefined && v.animation === undefined && v.color === undefined) return null;
+  return {
+    anchor: pick(v.anchor, ['top', 'center', 'bottom'] as const, 'top'),
+    animation: pick(v.animation, ['fade', 'rise', 'slide'] as const, 'fade'),
+    color: pick(v.color, ['white', 'black'] as const, 'white'),
+  };
+}
+
 // Each animation burns B300 GPU time, so each start costs a fresh Turnstile
 // solve on top of the shoot session: automated callers can't stockpile one
 // verification into many videos. The daily cap is the backstop.
@@ -35,9 +55,10 @@ export async function POST(req: Request) {
     let motion: string | null = null;
     let camera = 'slow_push_in';
     let voiceDesc: string | null = null;
+    let titleStyle: TitleStyle | null = null;
     for (const open of sparkOpenConfigured() ? [true, false] : [false]) {
       try {
-        const dir = await sparkJson<{ motion?: unknown; camera?: unknown; voice?: unknown }>({
+        const dir = await sparkJson<{ motion?: unknown; camera?: unknown; voice?: unknown; title?: unknown }>({
           system: ANIMATE_DIRECTOR_SYSTEM,
           text: animateDirectorText(product, shot),
           images: [image],
@@ -48,6 +69,7 @@ export async function POST(req: Request) {
         if (typeof dir?.motion === 'string' && dir.motion.trim()) motion = dir.motion.trim().slice(0, 600);
         if (dir?.camera === 'static' || dir?.camera === 'drift' || dir?.camera === 'slow_push_in') camera = dir.camera;
         if (typeof dir?.voice === 'string' && dir.voice.trim()) voiceDesc = dir.voice.trim().slice(0, 200);
+        titleStyle = readTitleStyle(dir?.title);
         break;
       } catch (err) {
         console.error(`[animate] direction via ${open ? 'open weights' : '1.3'} failed:`, err instanceof Error ? err.message : err);
@@ -58,6 +80,7 @@ export async function POST(req: Request) {
       ...(headline ? { headline } : {}),
       // The designed voice always ships with a headline: VoxCPM2 speaks it on the GPU.
       ...(headline ? { voice_desc: voiceDesc ?? DEFAULT_VOICE } : {}),
+      ...(headline && titleStyle ? { title_style: titleStyle } : {}),
     });
     const response = Response.json({ call_id });
     if (sessionCookie) response.headers.append('Set-Cookie', sessionCookie);

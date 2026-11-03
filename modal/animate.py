@@ -6,7 +6,7 @@ weights are downloaded. First-frame image conditioning animates the seller's
 chosen scene; the model also generates a matching ambience soundtrack.
 
 Endpoints (all need `Authorization: Bearer $ANIMATE_KEY`):
-  POST /start  {image_b64, prompt, aspect, duration_sec, camera, seed, headline?, voice_desc?} -> {call_id}
+  POST /start  {image_b64, prompt, aspect, duration_sec, camera, seed, headline?, voice_desc?, title_style?} -> {call_id}
   GET  /status/{call_id} -> {status: running|done|error, ...}
   GET  /result/{call_id} -> the finished MP4 bytes
 
@@ -191,31 +191,48 @@ def scrim_png(path: str, width: int, height: int) -> None:
     col.resize((width, h)).save(path)
 
 
-def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None, duration: float, width: int, height: int) -> None:
+TITLE_ANCHORS = ("top", "center", "bottom")
+TITLE_ANIMATIONS = ("fade", "rise", "slide")
+TITLE_COLORS = ("white", "black")
+
+
+def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None, duration: float, width: int, height: int,
+           title_style: dict | None = None) -> None:
     """Composite the animated headline and mix the voiceover over the ambience.
 
-    Headline geometry mirrors the stills' drawHeadline exactly (0.085w bold,
-    wrapped at 0.84w, top at 0.06h, gradient scrim), fading in over the first
-    0.8 s, holding, and fading out over the last 0.7 s. The voice starts at
-    0.4 s with the ambience ducked to 30%. Either input may be missing.
+    Without a directed style the headline mirrors the stills' drawHeadline
+    exactly (0.085w bold, wrapped at 0.84w, top at 0.06h, gradient scrim). The
+    director may move it (top/center/bottom), pick an entrance (fade/rise/slide)
+    and flip it black over bright scenes. Fades in over 0.8 s, holds, fades out
+    over the last 0.7 s. The voice starts at 0.4 s, ambience ducked to 30%.
     """
     if not headline and not voice_wav:
         os.replace(video_path, out_path)
         return
     from PIL import ImageFont
 
+    style = title_style if isinstance(title_style, dict) else {}
+    anchor = style.get("anchor") if style.get("anchor") in TITLE_ANCHORS else "top"
+    animation = style.get("animation") if style.get("animation") in TITLE_ANIMATIONS else "fade"
+    color = style.get("color") if style.get("color") in TITLE_COLORS else "white"
+    shadow = "white@0.45" if color == "black" else "black@0.45"
+
     cmd = ["ffmpeg", "-v", "error", "-y", "-i", video_path]
     scrim_path = None
+    size = line_height = top = 0
+    lines: list[str] = []
     if headline:
         size = round(width * 0.085)
         font = ImageFont.truetype(FONT, size)
         lines = wrap_headline(headline, font, width * 0.84)
         line_height = size * 1.15
-        top = height * 0.06
-        scrim_path = "/tmp/scrim.png"
-        scrim_png(scrim_path, width, round(top + len(lines) * line_height + size))
-        cmd += ["-loop", "1", "-framerate", str(FPS), "-i", scrim_path]
-    voice_idx = 2 if headline else 1
+        block = len(lines) * line_height
+        top = {"top": height * 0.06, "center": (height - block) / 2, "bottom": height * 0.94 - block}[anchor]
+        if anchor == "top":
+            scrim_path = "/tmp/scrim.png"
+            scrim_png(scrim_path, width, round(top + block + size))
+            cmd += ["-loop", "1", "-framerate", str(FPS), "-i", scrim_path]
+    voice_idx = (2 if scrim_path else 1) if headline else 1
     if voice_wav:
         cmd += ["-i", voice_wav]
     filters = []
@@ -223,15 +240,23 @@ def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None,
     fade_out = max(0.5, duration - 0.7)
     if headline:
         alpha = f"if(lt(t,0.8),t/0.8,if(gt(t,{fade_out:.2f}),({duration:.2f}-t)/0.7,1))"
-        filters.append(f"[1:v]format=rgba,fade=t=in:st=0:d=0.8:alpha=1,fade=t=out:st={fade_out:.2f}:d=0.7:alpha=1[sc]")
-        filters.append("[0:v][sc]overlay=0:0[v0]")
-        prev = "[v0]"
+        entrance = "1-t/0.8" if animation in ("rise", "slide") else "0"
+        base = "[0:v]"
+        if scrim_path:
+            filters.append(f"[1:v]format=rgba,fade=t=in:st=0:d=0.8:alpha=1,fade=t=out:st={fade_out:.2f}:d=0.7:alpha=1[sc]")
+            filters.append("[0:v][sc]overlay=0:0[v0]")
+            base = "[v0]"
+        # Non-top anchors get a soft box instead of the scrim for legibility.
+        box = "" if scrim_path else ":box=1:boxcolor=black@0.35:boxborderw=12"
+        prev = base
         for i, line in enumerate(lines):
-            out = f"[v{i + 1}]"
+            out = f"[vt{i + 1}]"
+            y = f"{top + i * line_height:.1f}-24*if(lt(t,0.8),{entrance},0)" if animation == "rise" else f"{top + i * line_height:.1f}"
+            x = f"(w-text_w)/2-40*if(lt(t,0.8),{entrance},0)" if animation == "slide" else "(w-text_w)/2"
             filters.append(
                 f"{prev}drawtext=fontfile={FONT}:text='{drawtext_escape(line)}':fontsize={size}:"
-                f"fontcolor=white:shadowcolor=black@0.45:shadowx=0:shadowy=2:"
-                f"x=(w-text_w)/2:y={top + i * line_height:.1f}:alpha='{alpha}'{out}"
+                f"fontcolor={color}:shadowcolor={shadow}:shadowx=0:shadowy=2{box}:"
+                f"x='{x}':y='{y}':alpha='{alpha}'{out}"
             )
             prev = out
         v_out = prev
@@ -382,7 +407,7 @@ class Animator:
             except Exception as e:
                 print(f"[tts] voiceover failed, shipping ambience only: {type(e).__name__}: {e}")
         duration = n_frames / FPS
-        finish(mixed, out, headline, voice_path, duration, width, height)
+        finish(mixed, out, headline, voice_path, duration, width, height, job.get("title_style"))
         with open(out, "rb") as f:
             video = f.read()
         for p in (out, mixed, first, "/tmp/voice.wav"):

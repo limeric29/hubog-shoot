@@ -191,6 +191,15 @@ test('the raw scene is animated and the headline is forwarded for post', async (
   assert.equal(seen[0].body.image_b64, other.replace(/^data:image\/\w+;base64,/, ''));
   assert.equal(seen[0].body.headline, 'Freshly Squeezed Daily');
   assert.equal(seen[0].body.voice_desc, 'bright market vendor, quick cheerful pace');
+  assert.equal(seen[0].body.title_style, undefined);
+});
+
+test('a directed title style is forwarded, clamped to implemented options', async () => {
+  const sparkResult = { motion: 'Steam curls upward.', camera: 'drift', title: { anchor: 'bottom', animation: 'spin', color: 'white' } };
+  const { start, seen } = handlers(() => json({ call_id: 'fc-title' }), {}, undefined, sparkResult);
+  const res = await start(post({ ...body, headline: 'Freshly Squeezed Daily' }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(JSON.parse(JSON.stringify(seen[0].body.title_style)), { anchor: 'bottom', animation: 'fade', color: 'white' });
 });
 
 test('a missing designed voice falls back to the default voice', async () => {
