@@ -284,8 +284,10 @@ def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None,
         a_out = "[a]"
     cmd += ["-filter_complex", ";".join(filters), "-map", v_out, "-map", a_out,
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", out_path]
-    subprocess.run(cmd, check=True, capture_output=True)
+            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", f"{duration:.2f}", out_path]
+    print(f"[timing] finish start (filters={len(filters)})", flush=True)
+    subprocess.run(cmd, check=True, capture_output=True, timeout=300)
+    print("[timing] finish done", flush=True)
     if scrim_path and os.path.exists(scrim_path):
         os.remove(scrim_path)
 
