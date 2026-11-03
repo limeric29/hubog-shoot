@@ -75,6 +75,8 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   const [updating, setUpdating] = useState(false);
   const [copied, setCopied] = useState('');
   const [turnstileReady, setTurnstileReady] = useState(false);
+  /** Tiny phones can't fit the 300px bar, so they get the square widget. */
+  const [narrowWidget, setNarrowWidget] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [turnstileError, setTurnstileError] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -146,6 +148,22 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     }).catch(() => setHistoryMessage('Shoot history is unavailable in this browser.'));
     void fetchMe().then(setMe);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 400px)');
+    const sync = () => setNarrowWidget(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 400px)');
+    const sync = () => setNarrowWidget(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
   }, []);
 
   function refreshMe() {
@@ -222,7 +240,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     turnstileId.current = window.turnstile.render(turnstileContainer.current, {
       sitekey: turnstileSiteKey,
       action: 'shoot',
-      size: hasPlanQuestion ? 'flexible' : 'normal',
+      size: hasPlanQuestion ? (narrowWidget ? 'compact' : 'flexible') : 'normal',
       callback: (token) => {
         setTurnstileToken(token);
         setTurnstileError('');
@@ -242,7 +260,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       turnstileId.current = null;
       setTurnstileToken('');
     };
-  }, [showTurnstile, stage, hasPlanQuestion, turnstileReady, turnstileSiteKey]);
+  }, [showTurnstile, stage, hasPlanQuestion, turnstileReady, turnstileSiteKey, narrowWidget]);
 
   // One visible Turnstile solve per animation: each GPU video costs a fresh
   // human verification, so a stockpiled session can't mint videos in a loop.
@@ -253,7 +271,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     animateWidgetId.current = window.turnstile.render(animateContainer.current, {
       sitekey: turnstileSiteKey,
       action: 'animate',
-      size: 'flexible',
+      size: narrowWidget ? 'compact' : 'flexible',
       callback: (token) => {
         setAnimateAsk(null);
         if (planRef.current) void animateOne(planRef.current, shot, token);
@@ -272,7 +290,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       animateWidgetId.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [animateAsk, turnstileEnabled, turnstileReady, turnstileSiteKey]);
+  }, [animateAsk, turnstileEnabled, turnstileReady, turnstileSiteKey, narrowWidget]);
 
   const patch = (id: string, next: Partial<ShotState>) => setShots((all) => ({ ...all, [id]: { ...all[id], ...next } }));
   const patchAnim = (id: string, next: AnimationState) => setAnims((all) => ({ ...all, [id]: next }));

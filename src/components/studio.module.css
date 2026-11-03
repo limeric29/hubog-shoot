@@ -157,7 +157,7 @@
 .packAction { flex: 0 0 350px; max-width: 100%; }
 .packAction > p { margin-top: 8px; color: var(--muted); font-size: 10px; line-height: 1.6; text-align: center; }
 .packAction .primaryButton { font-size: 13px; }
-.resultsLayout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; align-items: start; gap: 26px; }
+.resultsLayout { display: grid; grid-template-columns: minmax(0, 1fr) 350px; align-items: start; gap: 26px; }
 .gallery { min-width: 0; }
 .sectionHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .sectionHeading h2, .listingHeading h2 { font-family: var(--font-display), sans-serif; font-size: 24px; font-weight: 600; letter-spacing: -.5px; }
@@ -214,7 +214,8 @@
   .previewHeading > span:first-child { width: 100%; }
   .exampleBadge { margin-left: 0; margin-right: auto; }
   .contactSheet { height: 350px; gap: 10px 15px; margin-top: 20px; }
-  .resultsLayout { grid-template-columns: minmax(0, 1fr) 275px; gap: 20px; }
+  .resultsLayout { grid-template-columns: minmax(0, 1fr); gap: 26px; }
+  .listingSidebar { gap: 18px; }
 }
 
 @media (max-width: 800px) {
