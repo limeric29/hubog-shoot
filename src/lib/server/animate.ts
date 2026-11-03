@@ -27,10 +27,17 @@ async function modal(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
-export async function animateStart(imageB64: string, prompt: string, aspect: string, camera = 'slow_push_in'): Promise<string> {
+export interface AnimateExtras {
+  /** On-screen headline, composited animated in post so diffusion never touches text. */
+  headline?: string;
+  /** Base64 voiceover WAV, mixed over the ambience. */
+  voice_b64?: string;
+}
+
+export async function animateStart(imageB64: string, prompt: string, aspect: string, camera = 'slow_push_in', extras: AnimateExtras = {}): Promise<string> {
   const res = await modal('/start', {
     method: 'POST',
-    body: JSON.stringify({ image_b64: imageB64, prompt, aspect, duration_sec: 5, camera }),
+    body: JSON.stringify({ image_b64: imageB64, prompt, aspect, duration_sec: 5, camera, ...extras }),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || typeof json.call_id !== 'string') {

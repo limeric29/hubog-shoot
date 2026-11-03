@@ -6,7 +6,7 @@ weights are downloaded. First-frame image conditioning animates the seller's
 chosen scene; the model also generates a matching ambience soundtrack.
 
 Endpoints (all need `Authorization: Bearer $ANIMATE_KEY`):
-  POST /start  {image_b64, prompt, aspect, duration_sec, camera, seed} -> {call_id}
+  POST /start  {image_b64, prompt, aspect, duration_sec, camera, seed, headline?, voice_b64?} -> {call_id}
   GET  /status/{call_id} -> {status: running|done|error, ...}
   GET  /result/{call_id} -> the finished MP4 bytes
 
@@ -60,7 +60,7 @@ LTX_GIT = f"git+https://github.com/Lightricks/LTX-2.git@{LTX_COMMIT}#subdirector
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("git", "ffmpeg")
+    .apt_install("git", "ffmpeg", "fonts-dejavu-core")
     .uv_pip_install("torch==2.13.0", "torchvision==0.28.0", index_url=TORCH_INDEX)
     .uv_pip_install("torchaudio==2.11.0+cu132", index_url="https://download.pytorch.org/whl/test/cu132", extra_options="--no-deps")
     .uv_pip_install("natten==0.21.7+torch2130cu132", find_links="https://whl.natten.org")
@@ -123,6 +123,58 @@ def mux_audio(video_path: str, out_path: str, waveform, sampling_rate: int) -> N
          "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", out_path],
         input=wave.contiguous().cpu().numpy().tobytes(), check=True, capture_output=True,
     )
+
+
+FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+
+def drawtext_escape(s: str) -> str:
+    return s.replace("\\", "\\\\").replace(":", "\\:").replace("%", "\\%").replace("'", "\\'")
+
+
+def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None, duration: float, width: int) -> None:
+    """Composite the animated headline and mix the voiceover over the ambience.
+
+    The headline fades in over the first 0.8 s, holds, and fades out over the
+    last 0.7 s. The voice starts at 0.4 s with the ambience ducked to 30%.
+    Either input may be missing; the other still applies.
+    """
+    if not headline and not voice_wav:
+        os.replace(video_path, out_path)
+        return
+    cmd = ["ffmpeg", "-v", "error", "-y", "-i", video_path]
+    if voice_wav:
+        cmd += ["-i", voice_wav]
+    filters = []
+    v_out = "0:v"
+    if headline:
+        size = max(28, round(width / 14))
+        fade_out = max(0.5, duration - 0.7)
+        alpha = f"if(lt(t,0.8),t/0.8,if(gt(t,{fade_out:.2f}),({duration:.2f}-t)/0.7,1))"
+        filters.append(
+            f"[0:v]drawtext=fontfile={FONT}:text='{drawtext_escape(headline)}':fontsize={size}:"
+            f"fontcolor=white:borderw=2:bordercolor=black@0.6:shadowx=0:shadowy=2:"
+            f"x=(w-text_w)/2:y=h*0.08:alpha='{alpha}'[v]"
+        )
+        v_out = "[v]"
+    a_out = "0:a?"
+    if voice_wav:
+        filters.append(f"[1:a]adelay=400:all=1,atrim=0:{duration:.2f},asetpts=PTS-STARTPTS[vox]")
+        # Ambience may or may not exist; duck it when present, voice alone otherwise.
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", video_path],
+            capture_output=True, text=True,
+        )
+        if probe.stdout.strip():
+            filters.append("[0:a]volume=0.3[amb]")
+            filters.append("[amb][vox]amix=inputs=2:duration=first:dropout_transition=0[a]")
+        else:
+            filters.append("[vox]anull[a]")
+        a_out = "[a]"
+    cmd += ["-filter_complex", ";".join(filters), "-map", v_out, "-map", a_out,
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", out_path]
+    subprocess.run(cmd, check=True, capture_output=True)
 
 
 def cover_fit(raw: bytes, width: int, height: int) -> str:
@@ -213,7 +265,8 @@ class Animator:
         import base64
 
         width, height = SIZES.get(job.get("aspect"), SIZES["4:5"])
-        frames = FRAMES.get(int(job.get("duration_sec", 5)), FRAMES[5])
+        duration_sec = int(job.get("duration_sec", 5))
+        frames = FRAMES.get(duration_sec, FRAMES[5])
         camera = CAMERA_HINTS.get(job.get("camera"), CAMERA_HINTS["slow_push_in"])
         prompt = " ".join(x for x in (job.get("prompt", "").strip(), camera, TAKE_LINE, AUDIO_LINE, NO_TEXT_LINE) if x)
         try:
@@ -224,13 +277,27 @@ class Animator:
             first = cover_fit(raw, width, height)
         except Exception:
             raise ValueError("The scene photo could not be read. Try a JPEG or PNG.")
+        headline = str(job.get("headline", "") or "")[:120]
+        voice_path = None
+        if job.get("voice_b64"):
+            try:
+                with open("/tmp/voice.wav", "wb") as f:
+                    f.write(base64.b64decode(job["voice_b64"]))
+                voice_path = "/tmp/voice.wav"
+            except Exception:
+                raise ValueError("voice_b64 is not valid base64")
         out = "/tmp/animated.mp4"
-        n_frames, has_audio = self._generate(prompt, int(job.get("seed", 1)), width, height, frames, [first], out)
+        mixed = "/tmp/animated.mixed.mp4"
+        n_frames, has_audio = self._generate(prompt, int(job.get("seed", 1)), width, height, frames, [first], mixed)
+        duration = n_frames / FPS
+        finish(mixed, out, headline, voice_path, duration, width)
         with open(out, "rb") as f:
             video = f.read()
-        for p in (out, first):
-            os.remove(p)
-        return {"video": video, "frames": n_frames, "fps": FPS, "width": width, "height": height, "audio": has_audio}
+        for p in (out, mixed, first, "/tmp/voice.wav"):
+            if os.path.exists(p):
+                os.remove(p)
+        return {"video": video, "frames": n_frames, "fps": FPS, "width": width, "height": height,
+                "audio": has_audio or voice_path is not None, "headline": bool(headline), "voice": voice_path is not None}
 
 
 def _web_app():
@@ -262,7 +329,8 @@ def _web_app():
         except Exception as e:
             return {"status": "error", "message": f"{type(e).__module__}.{type(e).__name__}: {e}"[:500]}
         return {"status": "done", "frames": out["frames"], "fps": out["fps"],
-                "width": out["width"], "height": out["height"], "audio": out["audio"], "bytes": len(out["video"])}
+                "width": out["width"], "height": out["height"], "audio": out["audio"], "bytes": len(out["video"]),
+                "headline": out.get("headline", False), "voice": out.get("voice", False)}
 
     @web.get("/result/{call_id}")
     def result(call_id: str, _=Depends(check_key)):

@@ -244,6 +244,8 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     try {
       const { call_id } = await api<{ call_id: string }>('/api/animate', {
         image,
+        raw: shots[shot.id]?.raw ?? image,
+        headline: shot.headline ?? '',
         product: { name: pl.product.name, label_text: pl.product.label_text },
         shot: { aspect: shot.aspect, scene: shot.scene, backdrop: shot.backdrop },
         turnstileToken,

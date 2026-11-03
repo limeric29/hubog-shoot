@@ -181,3 +181,13 @@ test('the start token is verified as an animate action and refreshes the session
   assert.deepEqual(checked, [['fresh-token', 'animate']]);
   assert.equal(res.headers.get('Set-Cookie'), 'hubog_shoot_verified=new; Path=/api');
 });
+
+test('the raw scene is animated and the headline is forwarded for post', async () => {
+  const { start, seen } = handlers(() => json({ call_id: 'fc-raw' }), {});
+  const other = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABBJRU5ErkJggg==';
+  const res = await start(post({ ...body, raw: other, headline: 'Freshly Squeezed Daily' }));
+  assert.equal(res.status, 200);
+  assert.equal(seen[0].body.image_b64, other.replace(/^data:image\/\w+;base64,/, ''));
+  assert.equal(seen[0].body.headline, 'Freshly Squeezed Daily');
+  assert.equal(seen[0].body.voice_b64, undefined);
+});

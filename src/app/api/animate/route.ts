@@ -1,5 +1,6 @@
 import { handle, rateLimit, imageUrl, text } from '@/lib/server/http';
 import { animateStart } from '@/lib/server/animate';
+import { speak } from '@/lib/server/heygen';
 import { ANIMATE_DIRECTOR_SYSTEM, ANIMATE_MOTION_SCHEMA, animateDirectorText, animatePrompt } from '@/lib/server/prompts';
 import { sparkJson, sparkOpenConfigured } from '@/lib/server/meta';
 import { verifyShootSession, verifyTurnstile } from '@/lib/server/turnstile';
@@ -16,7 +17,11 @@ export async function POST(req: Request) {
     rateLimit(req, 'animate', 5, "You have used today's free animations on this demo. Please come back tomorrow.");
     await verifyShootSession(req);
     const body = await req.json();
-    const image = imageUrl(body.image, 'image');
+    // The raw scene when the client has it: baked headlines would freeze over
+    // moving video and diffusion garbles text, so the headline is composited
+    // animated in post instead.
+    const image = body.raw ? imageUrl(body.raw, 'raw') : imageUrl(body.image, 'image');
+    const headline = text(body.headline, 'headline', 120);
     const aspect = body.shot?.aspect as Aspect;
     if (!ASPECTS.includes(aspect)) throw new Error('aspect is not supported.');
     const sessionCookie = await verifyTurnstile(req, body.turnstileToken, 'animate');
@@ -47,7 +52,11 @@ export async function POST(req: Request) {
       }
     }
     const prompt = motion ?? animatePrompt(product, shot);
-    const call_id = await animateStart(image.replace(/^data:image\/\w+;base64,/, ''), prompt, aspect, camera);
+    const voice = headline ? await speak(headline) : null;
+    const call_id = await animateStart(image.replace(/^data:image\/\w+;base64,/, ''), prompt, aspect, camera, {
+      ...(headline ? { headline } : {}),
+      ...(voice ? { voice_b64: voice.b64 } : {}),
+    });
     const response = Response.json({ call_id });
     if (sessionCookie) response.headers.append('Set-Cookie', sessionCookie);
     return response;
