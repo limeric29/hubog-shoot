@@ -161,31 +161,80 @@ def probe_duration(path: str) -> float:
         return 0.0
 
 
-def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None, duration: float, width: int) -> None:
+def wrap_headline(headline: str, font, max_width: float) -> list[str]:
+    """Greedy word wrap mirroring the stills' drawHeadline (image.ts)."""
+    from PIL import ImageDraw
+
+    probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+    lines, line = [], ""
+    for word in headline.split():
+        nxt = f"{line} {word}".strip()
+        if line and probe.textlength(nxt, font=font) > max_width:
+            lines.append(line)
+            line = word
+        else:
+            line = nxt
+    if line:
+        lines.append(line)
+    return lines
+
+
+def scrim_png(path: str, width: int, height: int) -> None:
+    """Top gradient scrim mirroring the stills: black 50% fading to transparent."""
+    from PIL import Image as PILImage
+
+    h = max(1, height)
+    col = PILImage.new("RGBA", (1, h), (0, 0, 0, 0))
+    px = col.load()
+    for y in range(h):
+        px[0, y] = (0, 0, 0, round(128 * (1 - y / h)))
+    col.resize((width, h)).save(path)
+
+
+def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None, duration: float, width: int, height: int) -> None:
     """Composite the animated headline and mix the voiceover over the ambience.
 
-    The headline fades in over the first 0.8 s, holds, and fades out over the
-    last 0.7 s. The voice starts at 0.4 s with the ambience ducked to 30%.
-    Either input may be missing; the other still applies.
+    Headline geometry mirrors the stills' drawHeadline exactly (0.085w bold,
+    wrapped at 0.84w, top at 0.06h, gradient scrim), fading in over the first
+    0.8 s, holding, and fading out over the last 0.7 s. The voice starts at
+    0.4 s with the ambience ducked to 30%. Either input may be missing.
     """
     if not headline and not voice_wav:
         os.replace(video_path, out_path)
         return
+    from PIL import ImageFont
+
     cmd = ["ffmpeg", "-v", "error", "-y", "-i", video_path]
+    scrim_path = None
+    if headline:
+        size = round(width * 0.085)
+        font = ImageFont.truetype(FONT, size)
+        lines = wrap_headline(headline, font, width * 0.84)
+        line_height = size * 1.15
+        top = height * 0.06
+        scrim_path = "/tmp/scrim.png"
+        scrim_png(scrim_path, width, round(top + len(lines) * line_height + size))
+        cmd += ["-loop", "1", "-framerate", str(FPS), "-i", scrim_path]
+    voice_idx = 2 if headline else 1
     if voice_wav:
         cmd += ["-i", voice_wav]
     filters = []
     v_out = "0:v"
+    fade_out = max(0.5, duration - 0.7)
     if headline:
-        size = max(28, round(width / 14))
-        fade_out = max(0.5, duration - 0.7)
         alpha = f"if(lt(t,0.8),t/0.8,if(gt(t,{fade_out:.2f}),({duration:.2f}-t)/0.7,1))"
-        filters.append(
-            f"[0:v]drawtext=fontfile={FONT}:text='{drawtext_escape(headline)}':fontsize={size}:"
-            f"fontcolor=white:borderw=2:bordercolor=black@0.6:shadowx=0:shadowy=2:"
-            f"x=(w-text_w)/2:y=h*0.08:alpha='{alpha}'[v]"
-        )
-        v_out = "[v]"
+        filters.append(f"[1:v]format=rgba,fade=t=in:st=0:d=0.8:alpha=1,fade=t=out:st={fade_out:.2f}:d=0.7:alpha=1[sc]")
+        filters.append("[0:v][sc]overlay=0:0[v0]")
+        prev = "[v0]"
+        for i, line in enumerate(lines):
+            out = f"[v{i + 1}]"
+            filters.append(
+                f"{prev}drawtext=fontfile={FONT}:text='{drawtext_escape(line)}':fontsize={size}:"
+                f"fontcolor=white:shadowcolor=black@0.45:shadowx=0:shadowy=2:"
+                f"x=(w-text_w)/2:y={top + i * line_height:.1f}:alpha='{alpha}'{out}"
+            )
+            prev = out
+        v_out = prev
     a_out = "0:a?"
     if voice_wav:
         # Fit a long line by gently speeding it (capped, stays natural) instead
@@ -195,7 +244,7 @@ def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None,
         room = duration - VOICE_DELAY
         if spoken > room > 0:
             chain += f",atempo={min(spoken / room, 1.4):.3f}"
-        filters.append(f"[1:a]{chain},atrim=0:{duration:.2f},asetpts=PTS-STARTPTS[vox]")
+        filters.append(f"[{voice_idx}:a]{chain},atrim=0:{duration:.2f},asetpts=PTS-STARTPTS[vox]")
         # Ambience may or may not exist; duck it when present, voice alone otherwise.
         probe = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", video_path],
@@ -211,6 +260,8 @@ def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None,
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
             "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", out_path]
     subprocess.run(cmd, check=True, capture_output=True)
+    if scrim_path and os.path.exists(scrim_path):
+        os.remove(scrim_path)
 
 
 def cover_fit(raw: bytes, width: int, height: int) -> str:
@@ -331,7 +382,7 @@ class Animator:
             except Exception as e:
                 print(f"[tts] voiceover failed, shipping ambience only: {type(e).__name__}: {e}")
         duration = n_frames / FPS
-        finish(mixed, out, headline, voice_path, duration, width)
+        finish(mixed, out, headline, voice_path, duration, width, height)
         with open(out, "rb") as f:
             video = f.read()
         for p in (out, mixed, first, "/tmp/voice.wav"):
