@@ -83,6 +83,11 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   const animateWidgetId = useRef<TurnstileId | null>(null);
   const planRef = useRef<Plan | null>(null);
   const shootCreatedAt = useRef(0);
+  // In-flight shoots and animations check this before patching state: a result
+  // that lands after the seller opened another shoot is dropped, never written
+  // into the wrong shoot's scenes.
+  const activeShootIdRef = useRef('');
+  activeShootIdRef.current = activeShootId;
   const recorder = useRef(new Recorder());
   // The real cutout, ready once the main image is done. The fallback for a failed scene waits on it.
   const cutReady = useRef<Promise<HTMLCanvasElement | null>>(Promise.resolve(null));
@@ -252,8 +257,10 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
   async function animateOne(pl: Plan, shot: Shot, turnstileToken?: string) {
     const image = shots[shot.id]?.image;
+    const myShoot = activeShootId;
+    const guardAnim = (id: string, next: AnimationState) => { if (myShoot === activeShootIdRef.current) patchAnim(id, next); };
     if (!image || anims[shot.id]?.status === 'working') return;
-    patchAnim(shot.id, { status: 'working' });
+    guardAnim(shot.id, { status: 'working' });
     try {
       const { call_id } = await api<{ call_id: string }>('/api/animate', {
         image,
@@ -268,15 +275,15 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         await sleep(10000);
         const st = await apiGet<{ status: string; message?: string }>(`/api/animate/${call_id}`);
         if (st.status === 'done') {
-          patchAnim(shot.id, { status: 'ready', video: `/api/animate/${call_id}/video` });
+          guardAnim(shot.id, { status: 'ready', video: `/api/animate/${call_id}/video` });
           return;
         }
         if (st.status === 'error') throw new Error(st.message || 'The animation failed. Please try again.');
       }
       throw new Error('The animation is taking too long. Please try again later.');
     } catch (err) {
-      if (!needAuth(err)) patchAnim(shot.id, { status: 'failed', error: message(err) });
-      else patchAnim(shot.id, { status: 'failed', error: 'Create a free account to keep animating, then try this scene again.' });
+      if (!needAuth(err)) guardAnim(shot.id, { status: 'failed', error: message(err) });
+      else guardAnim(shot.id, { status: 'failed', error: 'Create a free account to keep animating, then try this scene again.' });
     } finally {
       refreshMe();
     }
@@ -332,10 +339,12 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
   /** Cuts the real product out of the photo and builds the white-background main image from it. */
   async function applyMask(p: Photo, m: Mask): Promise<HTMLCanvasElement> {
+    const myShoot = activeShootId;
+    const guardPatch = (id: string, next: Partial<ShotState>) => { if (myShoot === activeShootIdRef.current) patch(id, next); };
     const cut = await cutout(p, m);
     const url = onWhite(cut);
     setMask(m);
-    patch('main', {
+    guardPatch('main', {
       status: 'done',
       image: url,
       real: true,
@@ -345,13 +354,15 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   }
 
   async function makeMain(p: Photo, pl: Plan) {
-    patch('main', { status: 'shooting' });
+    const myShoot = activeShootId;
+    const guardPatch = (id: string, next: Partial<ShotState>) => { if (myShoot === activeShootIdRef.current) patch(id, next); };
+    guardPatch('main', { status: 'shooting' });
     cutReady.current = (async () => {
       try {
         const m = await api<Mask>('/api/segment', { image: p.url, width: p.width, height: p.height, phrase: pl.product.sam_phrase });
         return await applyMask(p, m);
       } catch (err) {
-        patch('main', { status: 'failed', error: message(err) });
+        guardPatch('main', { status: 'failed', error: message(err) });
         return null;
       }
     })();
@@ -361,29 +372,31 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   /** Shoots one scene, checks it against the real photo, and reshoots once if the product changed. */
   async function shootOne(p: Photo, pl: Plan, shot: Shot, sellerWords: string) {
     let problems: string[] = [];
+    const myShoot = activeShootId;
+    const guardPatch = (id: string, next: Partial<ShotState>) => { if (myShoot === activeShootIdRef.current) patch(id, next); };
     const rejected: { image: string; note: string }[] = [];
-    patch(shot.id, { rejected: [], composite: false });
+    guardPatch(shot.id, { rejected: [], composite: false });
     try {
       for (let attempt = 1; attempt <= 2; attempt++) {
-        patch(shot.id, { status: attempt === 1 ? 'shooting' : 'redoing', error: undefined });
+        guardPatch(shot.id, { status: attempt === 1 ? 'shooting' : 'redoing', error: undefined });
         const { image } = await api<{ image: string }>('/api/shoot', { photo: p.url, product: pl.product, shot, problems });
-        patch(shot.id, { status: 'checking' });
+        guardPatch(shot.id, { status: 'checking' });
         const fitted = await fitShot(image, shot.aspect);
         const verdict = await api<Verdict>('/api/check', { photo: p.url, image: fitted, product: pl.product, language: sellerWords });
         if (verdict.pass) {
-          patch(shot.id, { status: 'done', raw: image, image: await fitShot(image, shot.aspect, shot.headline), verdict, real: false });
+          guardPatch(shot.id, { status: 'done', raw: image, image: await fitShot(image, shot.aspect, shot.headline), verdict, real: false });
           return;
         }
         problems = verdict.problems;
         rejected.push({ image: fitted, note: verdict.seller_note });
-        patch(shot.id, { verdict, rejected: [...rejected] });
+        guardPatch(shot.id, { verdict, rejected: [...rejected] });
       }
       // Two tries changed the product. Keep the scene, drop the product, and place the real cutout in it.
-      patch(shot.id, { status: 'redoing', verdict: undefined });
+      guardPatch(shot.id, { status: 'redoing', verdict: undefined });
       const cut = await cutReady.current;
       if (!cut) throw new Error('This scene kept changing your product, and the cutout is not ready to use instead.');
       const { image: scene } = await api<{ image: string }>('/api/shoot', { empty: true, product: pl.product, shot });
-      patch(shot.id, {
+      guardPatch(shot.id, {
         status: 'done',
         image: await placeOnScene(scene, shot.aspect, cut, shot.headline, shot.kind === 'detail' ? 0.75 : 0.5),
         real: true,
@@ -391,7 +404,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         verdict: { pass: true, problems: [], seller_note: 'The scene kept changing your product, so your real cutout was placed on it instead.' },
       });
     } catch (err) {
-      patch(shot.id, { status: 'failed', error: message(err) });
+      guardPatch(shot.id, { status: 'failed', error: message(err) });
     }
   }
 
@@ -413,6 +426,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     setStage('planning');
     try {
       const p = await api<Plan>('/api/plan', { photo: photo.url, brief, turnstileToken: turnstileEnabled ? turnstileToken : undefined });
+      if (shootId !== activeShootIdRef.current) return;
       setPlan(p);
       setAnswer('');
       setCopied('');
@@ -427,6 +441,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         (s) => shootOne(photo, p, s, brief),
       );
     } catch (err) {
+      if (shootId !== activeShootIdRef.current) return;
       if (needAuth(err)) setError('');
       else setError(message(err));
       setActiveShootId('');
@@ -483,8 +498,10 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     }
     setUpdating(true);
     setError('');
+    const myShoot = activeShootId;
     try {
       const next = await api<Plan>('/api/plan', { photo: photo.url, brief, answer, turnstileToken: turnstileEnabled ? turnstileToken : undefined });
+      if (myShoot !== activeShootIdRef.current) return;
       const merged: Plan = {
         ...plan,
         question: '',
