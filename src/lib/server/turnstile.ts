@@ -2,7 +2,10 @@ import { MetaError } from './meta';
 
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 const SESSION_COOKIE = 'hubog_shoot_verified';
-const SESSION_MAX_AGE_SECONDS = 60 * 60;
+// A week: history shoots stay usable without re-solving. Quotas (per-IP,
+// per-account, global) are the real backstop; the session only proves
+// humanity once.
+const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 /** Turnstile protects production requests and stays off in local development. */
 export function turnstileEnabled() {

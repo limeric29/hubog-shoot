@@ -31,13 +31,19 @@ function readTitleStyle(value: unknown): TitleStyle | null {
 }
 
 // Each animation burns B300 GPU time, so each start costs a fresh Turnstile
-// solve on top of the shoot session: automated callers can't stockpile one
-// verification into many videos. The daily cap is the backstop.
+// solve: automated callers can't stockpile one verification into many videos.
+// The shoot session is only a fast path — history shoots outlive it, and the
+// fresh solve below gates every animation either way. Daily caps backstop.
 export async function POST(req: Request) {
   return handle(async () => {
     const me = await getAuthUser(req);
     if (!me || !isStaff(me.email)) rateLimit(req, 'animate', 5, "You have used today's free animations on this demo. Please come back tomorrow.");
-    await verifyShootSession(req);
+    try {
+      await verifyShootSession(req);
+    } catch {
+      // No shoot session (history or deep-link shoot): the fresh token
+      // verified below re-establishes it.
+    }
     const body = await req.json();
     // The raw scene when the client has it: baked headlines would freeze over
     // moving video and diffusion garbles text, so the headline is composited
