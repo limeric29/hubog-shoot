@@ -250,20 +250,28 @@ export async function segment(opts: {
       })
     : (opts.phrase ?? 'product');
   const modelId = model('SAM_MODEL', 'sam-3.1');
-  const events = await client().responses.create({
-    model: modelId,
-    input: [
-      {
-        type: 'message',
-        role: 'user',
-        content: [
-          { type: 'input_text', text },
-          { type: 'input_image', image_url: opts.image, detail: 'auto' },
-        ],
-      },
-    ],
-    stream: true,
-  });
+  let events;
+  try {
+    events = await client().responses.create({
+      model: modelId,
+      input: [
+        {
+          type: 'message',
+          role: 'user',
+          content: [
+            { type: 'input_text', text },
+            { type: 'input_image', image_url: opts.image, detail: 'auto' },
+          ],
+        },
+      ],
+      stream: true,
+    });
+  } catch (err) {
+    if (/needs a box or a positive point/.test(err instanceof Error ? err.message : '')) {
+      throw new MetaError(422, 'Tap the product first with Keep selected, then erase around it.');
+    }
+    throw err;
+  }
   const result = await parseImageStream(events as never).finalResult;
   book(modelId, PRICE.sam, '1 image');
 

@@ -30,6 +30,10 @@ export function FixCutout({ photo, initial, fresh, onApply, onClose }: { photo: 
     const x = Math.max(0, Math.min(photo.width - 1, Math.floor(((e.clientX - rect.left) * photo.width) / rect.width)));
     const y = Math.max(0, Math.min(photo.height - 1, Math.floor(((e.clientY - rect.top) * photo.height) / rect.height)));
     const next = [...taps, { x, y, negative: remove }];
+    if (remove && !next.some((t) => !t.negative)) {
+      setError('Tap the product first with Keep selected, then erase around it.');
+      return;
+    }
     setTaps(next);
     setBusy(true);
     setError('');
