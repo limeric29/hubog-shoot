@@ -708,6 +708,20 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     }
   }
 
+  /** Back to a fresh brief form; any running shoot keeps saving into history. */
+  function goHome() {
+    setShootUrl(null);
+    setPhoto(null);
+    setBrief('');
+    setAnswer('');
+    setError('');
+    setHistoryOpen(false);
+    setAuthOpen(false);
+    setFixing(false);
+    setStage('brief');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   const currentStep = stage === 'brief' ? 0 : stage === 'planning' || !settled ? 1 : 2;
 
   return (
@@ -715,14 +729,14 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       <a href="#studio" className={styles.skipLink}>Skip to studio</a>
       {turnstileEnabled && turnstileSiteKey && <Script id="turnstile" src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" strategy="afterInteractive" onReady={() => setTurnstileReady(true)} onError={() => setTurnstileError('Verification could not load. Refresh the page and try again.')} />}
       <header className={styles.header}>
-        <div className={styles.brand} role="img" aria-label="Hubog Shoot">
+        <button type="button" className={styles.brand} onClick={goHome} aria-label="Hubog Shoot home">
           {/* Keep the original Hubog lockup unchanged; Shoot is a separate descriptor. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/hubog-lockup-light-240.png" alt="" width="240" height="73" className={`${styles.brandLogo} ${styles.brandLogoLight}`} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/hubog-lockup-dark-240.png" alt="" width="240" height="73" className={`${styles.brandLogo} ${styles.brandLogoDark}`} aria-hidden="true" />
           <span className={styles.shootDescriptor} aria-hidden="true">shoot<svg viewBox="0 0 72 34" preserveAspectRatio="none" aria-hidden="true"><path d="M1 9V2a1 1 0 0 1 1-1h7m54 0h7a1 1 0 0 1 1 1v7M1 25v7a1 1 0 0 0 1 1h7m54 0h7a1 1 0 0 0 1-1v-7" /></svg></span>
-        </div>
+        </button>
         <div className={styles.headerActions}>
           {me?.email ? (
             <>
@@ -931,7 +945,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                   ))}
                   <span className="sr-only" role="status">{copied ? `${copied} copied to clipboard.` : ''}</span>
                 </section>
-                <button type="button" disabled={!settled} onClick={() => { setShootUrl(null); setPhoto(null); setBrief(''); setAnswer(''); setError(''); setStage('brief'); }} className={styles.startAgain}><Icon name="refresh" width="17" height="17" />Make photos for another product</button>
+                <button type="button" disabled={!settled} onClick={goHome} className={styles.startAgain}><Icon name="refresh" width="17" height="17" />Make photos for another product</button>
               </aside>
             </div>
           </>

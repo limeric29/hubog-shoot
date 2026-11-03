@@ -31,7 +31,7 @@
   border-bottom: 1px solid var(--line);
 }
 
-.brand { display: flex; align-items: center; gap: 12px; padding: 12px; margin-left: -12px; white-space: nowrap; }
+.brand { display: flex; align-items: center; gap: 12px; padding: 12px; margin-left: -12px; border: none; background: none; font: inherit; white-space: nowrap; cursor: pointer; }
 .brandLogo { display: block; width: auto; height: 36px; }
 .brandLogoLight { display: block; }
 .brandLogoDark { display: none; }
