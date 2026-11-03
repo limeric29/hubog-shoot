@@ -290,7 +290,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
   async function animateOne(pl: Plan, shot: Shot, turnstileToken?: string) {
     const image = shots[shot.id]?.image;
-    const myShoot = activeShootId;
+    const myShoot = activeShootIdRef.current;
     const guardAnim = (id: string, next: AnimationState) => { void patchAnimFor(myShoot, id, next); };
     if (!image || anims[shot.id]?.status === 'working') return;
     guardAnim(shot.id, { status: 'working' });
@@ -371,8 +371,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   }
 
   /** Cuts the real product out of the photo and builds the white-background main image from it. */
-  async function applyMask(p: Photo, m: Mask): Promise<HTMLCanvasElement> {
-    const myShoot = activeShootId;
+  async function applyMask(p: Photo, m: Mask, myShoot: string): Promise<HTMLCanvasElement> {
     const guardPatch = (id: string, next: Partial<ShotState>) => { void patchFor(myShoot, id, next); };
     const cut = await cutout(p, m);
     const url = onWhite(cut);
@@ -386,14 +385,13 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     return cut;
   }
 
-  async function makeMain(p: Photo, pl: Plan) {
-    const myShoot = activeShootId;
+  async function makeMain(p: Photo, pl: Plan, myShoot: string) {
     const guardPatch = (id: string, next: Partial<ShotState>) => { void patchFor(myShoot, id, next); };
     guardPatch('main', { status: 'shooting' });
     cutReady.current = (async () => {
       try {
         const m = await api<Mask>('/api/segment', { image: p.url, width: p.width, height: p.height, phrase: pl.product.sam_phrase });
-        return await applyMask(p, m);
+        return await applyMask(p, m, myShoot);
       } catch (err) {
         guardPatch('main', { status: 'failed', error: message(err) });
         return null;
@@ -403,9 +401,8 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   }
 
   /** Shoots one scene, checks it against the real photo, and reshoots once if the product changed. */
-  async function shootOne(p: Photo, pl: Plan, shot: Shot, sellerWords: string) {
+  async function shootOne(p: Photo, pl: Plan, shot: Shot, sellerWords: string, myShoot: string) {
     let problems: string[] = [];
-    const myShoot = activeShootId;
     const guardPatch = (id: string, next: Partial<ShotState>) => { void patchFor(myShoot, id, next); };
     const rejected: { image: string; note: string }[] = [];
     guardPatch(shot.id, { rejected: [], composite: false });
@@ -467,11 +464,11 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       setAnims({});
       setMask(null);
       setStage('results');
-      void makeMain(photo, p);
+      void makeMain(photo, p, shootId);
       void pool(
         p.shots.filter((s) => s.kind !== 'main'),
         3,
-        (s) => shootOne(photo, p, s, brief),
+        (s) => shootOne(photo, p, s, brief, shootId),
       );
     } catch (err) {
       if (shootId !== activeShootIdRef.current) return;
@@ -531,7 +528,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     }
     setUpdating(true);
     setError('');
-    const myShoot = activeShootId;
+    const myShoot = activeShootIdRef.current;
     try {
       const next = await api<Plan>('/api/plan', { photo: photo.url, brief, answer, turnstileToken: turnstileEnabled ? turnstileToken : undefined });
       if (myShoot !== activeShootIdRef.current) return;
@@ -768,7 +765,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                       shot={shot}
                       state={shots[shot.id] ?? { status: 'queued' }}
                       fileName={slug(plan.product.name)}
-                      onRedo={() => void (shot.kind === 'main' ? makeMain(photo, plan) : shootOne(photo, plan, shot, brief))}
+                      onRedo={() => void (shot.kind === 'main' ? makeMain(photo, plan, activeShootIdRef.current) : shootOne(photo, plan, shot, brief, activeShootIdRef.current))}
                       onFix={shot.kind === 'main' ? () => setFixing(true) : undefined}
                     />
                   ))}
@@ -778,7 +775,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                       shot={shot}
                       state={shots[shot.id] ?? { status: 'queued' }}
                       fileName={slug(plan.product.name)}
-                      onRedo={() => void shootOne(photo, plan, shot, brief)}
+                      onRedo={() => void shootOne(photo, plan, shot, brief, activeShootIdRef.current)}
                       onAnimate={() => {
                         planRef.current = plan;
                         if (turnstileEnabled) setAnimateAsk(shot);
@@ -827,7 +824,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
           </>
         )}
 
-        {fixing && photo && <FixCutout photo={photo} initial={mask} onClose={() => setFixing(false)} onApply={(m) => { setFixing(false); void applyMask(photo, m); }} />}
+        {fixing && photo && <FixCutout photo={photo} initial={mask} onClose={() => setFixing(false)} onApply={(m) => { setFixing(false); void applyMask(photo, m, activeShootIdRef.current); }} />}
         {authOpen && <AuthModal siteKey={turnstileSiteKey} turnstileEnabled={turnstileEnabled} reason={authReason} onClose={() => setAuthOpen(false)} onDone={(next) => { setMe(next); setAuthOpen(false); }} />}
       </main>
 
