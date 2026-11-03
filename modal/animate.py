@@ -278,7 +278,8 @@ def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None,
         )
         if probe.stdout.strip():
             filters.append("[0:a]volume=0.3[amb]")
-            filters.append("[amb][vox]amix=inputs=2:duration=first:dropout_transition=0[a]")
+            # amix halves every input: compensate so the voice stays forward.
+            filters.append("[amb][vox]amix=inputs=2:duration=first:dropout_transition=0,volume=2[a]")
         else:
             filters.append("[vox]anull[a]")
         a_out = "[a]"
