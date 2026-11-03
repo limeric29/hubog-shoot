@@ -129,6 +129,7 @@ export async function fetchMe(): Promise<Me | null> {
 export function quotaText(me: Me | null): string {
   if (!me) return '';
   const q = me.quota;
+  if (q.shootsLimit >= 999) return 'Staff account: unlimited shoots and animations';
   if (!q.registered) return `Free trial: ${q.shootsLeft} of ${q.shootsLimit} shoots · ${q.animsLeft} of ${q.animsLimit} animations left`;
   return `Today: ${q.shootsLeft} of ${q.shootsLimit} shoots · ${q.animsLeft} of ${q.animsLimit} animations left`;
 }

@@ -22,6 +22,12 @@ const DISPOSABLE = new Set([
 
 export const todayUTC = () => new Date().toISOString().slice(0, 10);
 
+/** Staff test accounts skip personal quotas. Comma-separated emails in STAFF_EMAILS. */
+export function isStaff(email: string): boolean {
+  const list = (process.env.STAFF_EMAILS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return list.includes(email.trim().toLowerCase());
+}
+
 export function clientIp(req: Request): string {
   const direct = req.headers.get('cf-connecting-ip')?.trim();
   if (direct) return direct.slice(0, 80);
@@ -163,6 +169,9 @@ export interface QuotaView {
 
 /** Remaining quota without consuming anything, for the quota display. */
 export async function quotaFor(user: AuthUser | null, ip: string): Promise<QuotaView> {
+  if (user && isStaff(user.email)) {
+    return { registered: true, shootsLeft: 999, animsLeft: 999, shootsLimit: 999, animsLimit: 999, window: 'day' };
+  }
   const db = await getDb();
   if (user) {
     const used = await db.readQuota('user', user.id, todayUTC());
@@ -173,6 +182,7 @@ export async function quotaFor(user: AuthUser | null, ip: string): Promise<Quota
 }
 
 async function consume(user: AuthUser | null, ip: string, kind: 'shoots' | 'anims'): Promise<void> {
+  if (user && isStaff(user.email)) return;
   const db = await getDb();
   if (user) {
     const q = await db.consumeQuota('user', user.id, todayUTC(), kind, DAILY_FREE, Math.floor(Date.now() / 1000));

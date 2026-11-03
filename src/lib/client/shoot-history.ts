@@ -25,6 +25,27 @@ export interface SavedShoot {
   plan: Plan;
   shots: Record<string, SavedShotState>;
   mask: Mask | null;
+  /** Finished animations, videos inlined as data URLs so they survive Modal result expiry. */
+  anims?: Record<string, { status: 'ready'; video: string }>;
+}
+
+/** Fetch a same-origin video URL into a data URL. Null when too big or unreadable. */
+export async function videoToDataUrl(url: string, maxBytes = 8_000_000): Promise<string | null> {
+  try {
+    if (url.startsWith('data:')) return url.length < maxBytes * 1.4 ? url : null;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (blob.size === 0 || blob.size > maxBytes) return null;
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
 }
 
 export interface ShootHistoryItem {

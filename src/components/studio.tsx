@@ -12,7 +12,7 @@ import { FixCutout } from './fix-cutout';
 import { ShotCard, type AnimationState, type ShotState } from './shot-card';
 import { Icon } from './icon';
 import { PackPreview } from './pack-preview';
-import { deleteShoot, getShoot, listShoots, saveShoot, type ShootHistoryItem } from '@/lib/client/shoot-history';
+import { deleteShoot, getShoot, listShoots, saveShoot, videoToDataUrl, type ShootHistoryItem } from '@/lib/client/shoot-history';
 import styles from './studio.module.css';
 
 type Stage = 'brief' | 'planning' | 'results';
@@ -148,6 +148,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   useEffect(() => {
     if (stage !== 'results' || !activeShootId || !plan || !photo) return;
     const timer = window.setTimeout(() => {
+      void (async () => {
       const savedShots = Object.fromEntries(plan.shots.map((shot) => {
         const state = shots[shot.id] ?? { status: 'queued' as const };
         const finished = state.status === 'done' && Boolean(state.image);
@@ -161,21 +162,32 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
           ...(!finished ? { error: state.error || 'This photo was still being made when you left. Try again.' } : {}),
         }];
       }));
-      void saveShoot({
-        id: activeShootId,
-        createdAt: shootCreatedAt.current || Date.now(),
-        updatedAt: Date.now(),
-        brief,
-        photo,
-        plan,
-        shots: savedShots,
-        mask,
-      }).then(() => listShoots().then(setHistory)).catch(() => {
+      const savedAnims: Record<string, { status: 'ready'; video: string }> = {};
+      for (const [id, anim] of Object.entries(anims)) {
+        if (anim?.status !== 'ready' || !anim.video) continue;
+        const inline = await videoToDataUrl(anim.video);
+        if (inline) savedAnims[id] = { status: 'ready', video: inline };
+      }
+      try {
+        await saveShoot({
+          id: activeShootId,
+          createdAt: shootCreatedAt.current || Date.now(),
+          updatedAt: Date.now(),
+          brief,
+          photo,
+          plan,
+          shots: savedShots,
+          mask,
+          anims: savedAnims,
+        });
+        setHistory(await listShoots());
+      } catch {
         setHistoryMessage('This shoot could not be saved. Check your browser storage and try again.');
-      });
+      }
+      })();
     }, 600);
     return () => window.clearTimeout(timer);
-  }, [activeShootId, brief, mask, photo, plan, shots, stage]);
+  }, [activeShootId, anims, brief, mask, photo, plan, shots, stage]);
 
   useEffect(() => {
     if (!showTurnstile || !turnstileSiteKey || !turnstileReady || !turnstileContainer.current || !window.turnstile) return;
@@ -404,6 +416,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       setAnswer('');
       setCopied('');
       setShots(Object.fromEntries(p.shots.map((s) => [s.id, { status: 'queued' } as ShotState])));
+      setAnims({});
       setMask(null);
       setStage('results');
       void makeMain(photo, p);

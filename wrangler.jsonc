@@ -33,7 +33,8 @@
     "MUSE_VOICE_USD_PER_HOUR": "0.18",
     "TURNSTILE_ENABLED": "true",
     "TURNSTILE_SITEKEY": "0x4AAAAAAFtTm2cPGOof09MP",
-    "TURNSTILE_HOSTNAMES": "shoot.hubog.app"
+    "TURNSTILE_HOSTNAMES": "shoot.hubog.app",
+    "STAFF_EMAILS": "e2e-live@example.com"
   },
   "secrets": { "required": ["MODEL_API_KEY", "TURNSTILE_SECRET"] }
 }

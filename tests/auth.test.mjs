@@ -13,7 +13,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 // Load the real auth, db, and route modules with stubbed model errors and
 // Turnstile. The db falls back to its in-memory twin (NODE_ENV=test), so each
 // ctx() gets a fresh isolated store and no test touches D1 or the network.
-function ctx() {
+function ctx(env = {}) {
   const cache = new Map();
   const metaStub = {
     MetaError: class extends Error {
@@ -44,7 +44,7 @@ function ctx() {
       exports: loadedModule.exports, module: loadedModule, require,
       Response, Request, Error, URL, Buffer, TextEncoder,
       crypto: webcrypto, setTimeout,
-      process: { env: { NODE_ENV: 'test' } },
+      process: { env: { NODE_ENV: 'test', ...env } },
       console: { error() {} },
     }, { filename: file });
     return loadedModule.exports;
@@ -172,6 +172,24 @@ test('registrations are capped per network per day', async () => {
   await t.auth.register('u2@example.com', 'sampaguita-1', ip);
   await t.auth.register('u3@example.com', 'sampaguita-1', ip);
   await assert.rejects(() => t.auth.register('u4@example.com', 'sampaguita-1', ip), /Too many accounts/);
+});
+
+test('staff accounts skip personal quotas', async () => {
+  const t = ctx({ STAFF_EMAILS: 'E2E-Live@Example.com' });
+  const user = await t.auth.register('e2e-live@example.com', 'sampaguita-1', '203.0.113.20');
+  for (let i = 0; i < 5; i++) {
+    await t.auth.consumeShoot(user, '203.0.113.20');
+    await t.auth.consumeAnim(user, '203.0.113.20');
+  }
+  const quota = await t.auth.quotaFor(user, '203.0.113.20');
+  assert.equal(quota.shootsLeft, 999);
+  assert.equal(quota.animsLeft, 999);
+});
+
+test('the global animation cap bounds GPU spend', async () => {
+  const t = ctx();
+  for (let i = 0; i < 100; i++) await t.auth.consumeGlobalAnims();
+  await assert.rejects(() => t.auth.consumeGlobalAnims(), /fully booked/);
 });
 
 test('the global animation cap bounds GPU spend', async () => {

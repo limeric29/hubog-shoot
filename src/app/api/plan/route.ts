@@ -1,7 +1,7 @@
 import { handle, rateLimit, imageUrl, text } from '@/lib/server/http';
 import { MetaError, sparkJson } from '@/lib/server/meta';
 import { PLAN_SCHEMA, PLAN_SYSTEM, planText } from '@/lib/server/prompts';
-import { clientIp, consumeShoot, getAuthUser } from '@/lib/server/auth';
+import { clientIp, consumeShoot, getAuthUser, isStaff } from '@/lib/server/auth';
 import { verifyTurnstile } from '@/lib/server/turnstile';
 import type { Aspect, Plan, Shot } from '@/lib/types';
 
@@ -9,7 +9,8 @@ const ASPECTS: Aspect[] = ['1:1', '4:5', '9:16'];
 
 export async function POST(req: Request) {
   return handle(async () => {
-    rateLimit(req, 'plan', 12);
+    const me = await getAuthUser(req);
+    if (!me || !isStaff(me.email)) rateLimit(req, 'plan', 12);
     const body = await req.json();
     const photo = imageUrl(body.photo, 'photo');
     const brief = text(body.brief, 'brief', 2000);
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
     const sessionCookie = await verifyTurnstile(req, body.turnstileToken, 'shoot');
     // Answering the plan's follow-up question re-plans the same shoot, so it
     // must not burn another free shoot.
-    if (!answer) await consumeShoot(await getAuthUser(req), clientIp(req));
+    if (!answer) await consumeShoot(me, clientIp(req));
     const plan = await sparkJson<Plan>({
       system: PLAN_SYSTEM,
       text: planText(brief, answer),
