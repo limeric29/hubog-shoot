@@ -289,7 +289,7 @@ export async function segment(opts: {
       };
     }
   }
-  if (!best || best.area === 0) throw new MetaError(422, 'SAM found nothing to cut out.');
+  if (!best || best.area === 0) throw new MetaError(422, 'SAM found nothing to cut out. Tap Mark product below to outline it yourself.');
   return best;
 }
 

@@ -12,7 +12,7 @@ interface Tap {
 }
 
 /** Tap the product to add to the cutout, or tap what doesn't belong to take it out. SAM 3.1 redraws after every tap. */
-export function FixCutout({ photo, initial, onApply, onClose }: { photo: Photo; initial: Mask | null; onApply: (mask: Mask) => void; onClose: () => void }) {
+export function FixCutout({ photo, initial, fresh, onApply, onClose }: { photo: Photo; initial: Mask | null; fresh?: boolean; onApply: (mask: Mask) => void; onClose: () => void }) {
   const [taps, setTaps] = useState<Tap[]>([]);
   const [mask, setMask] = useState<Mask | null>(initial);
   const [remove, setRemove] = useState(false);
@@ -44,11 +44,11 @@ export function FixCutout({ photo, initial, onApply, onClose }: { photo: Photo; 
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Adjust the product outline">
+    <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={fresh ? 'Mark your product' : 'Adjust the product outline'}>
       <div className="flex max-h-full w-full max-w-lg flex-col gap-3 overflow-auto rounded-t-2xl bg-[var(--card)] p-4 sm:rounded-2xl">
         <div>
-          <h2 className="text-lg font-bold">Adjust the product outline</h2>
-          <p className="text-sm text-[var(--muted)]">Tap any part of the product that’s missing. Choose Remove, then tap anything outside the product.</p>
+          <h2 className="text-lg font-bold">{fresh ? 'Mark your product' : 'Adjust the product outline'}</h2>
+          <p className="text-sm text-[var(--muted)]">{fresh ? 'Tap the product to outline it. Choose Erase, then tap anything around it the outline grabs by mistake.' : 'Tap any part of the product that’s missing. Choose Erase, then tap anything outside the product.'}</p>
         </div>
         <div className="relative touch-none select-none overflow-hidden rounded-xl border border-[var(--line)]" onPointerDown={tap} style={{ aspectRatio: `${photo.width} / ${photo.height}` }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}

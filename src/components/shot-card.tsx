@@ -48,7 +48,7 @@ export interface AnimateVerify {
   onCancel: () => void;
 }
 
-export function ShotCard({ shot, state, fileName, onRedo, onFix, onAnimate, animation, verify }: { shot: Shot; state: ShotState; fileName: string; onRedo: () => void; onFix?: () => void; onAnimate?: () => void; animation?: AnimationState; verify?: AnimateVerify }) {
+export function ShotCard({ shot, state, fileName, onRedo, onFix, onMark, onAnimate, animation, verify }: { shot: Shot; state: ShotState; fileName: string; onRedo: () => void; onFix?: () => void; onMark?: () => void; onAnimate?: () => void; animation?: AnimationState; verify?: AnimateVerify }) {
   const busy = state.status === 'queued' || state.status === 'shooting' || state.status === 'checking' || state.status === 'redoing';
   return (
     <article className={styles.card} aria-label={shot.title}>
@@ -91,6 +91,7 @@ export function ShotCard({ shot, state, fileName, onRedo, onFix, onAnimate, anim
           {state.status === 'done' && state.image && <a href={state.image} download={`${fileName}-${shot.id}.jpg`} className={styles.download}><Icon name="download" width="15" height="15" />Download</a>}
           {onFix && state.status === 'done' && <button type="button" onClick={onFix} className={styles.secondary}>Adjust cutout</button>}
           {(state.status === 'failed' || (!onFix && state.status === 'done')) && <button type="button" onClick={onRedo} className={styles.secondary}><Icon name="refresh" width="14" height="14" />{state.status === 'failed' ? 'Try again' : 'Make again'}</button>}
+          {onMark && state.status === 'failed' && <button type="button" onClick={onMark} className={styles.secondary}>Mark product</button>}
           {onAnimate && state.status === 'done' && state.image && !verify && animation?.status !== 'working' && animation?.status !== 'ready' && <button type="button" onClick={onAnimate} className={styles.secondary}><Icon name="play" width="14" height="14" />{animation?.status === 'failed' ? 'Animate again' : 'Animate'}</button>}
         </div>
         {onAnimate && verify && (

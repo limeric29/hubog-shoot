@@ -879,6 +879,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                       fileName={slug(plan.product.name)}
                       onRedo={() => void (shot.kind === 'main' ? makeMain(photo, plan, activeShootIdRef.current) : shootOne(photo, plan, shot, brief, activeShootIdRef.current))}
                       onFix={shot.kind === 'main' ? () => setFixing(true) : undefined}
+                      onMark={shot.kind === 'main' && shots[shot.id]?.status === 'failed' && /cut out/.test(shots[shot.id]?.error ?? '') ? () => setFixing(true) : undefined}
                     />
                   ))}
                   {plan.shots.filter((shot) => shot.kind !== 'main').map((shot) => (
@@ -936,7 +937,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
           </>
         )}
 
-        {fixing && photo && <FixCutout photo={photo} initial={mask} onClose={() => setFixing(false)} onApply={(m) => { setFixing(false); void applyMask(photo, m, activeShootIdRef.current); }} />}
+        {fixing && photo && <FixCutout photo={photo} initial={mask} fresh={!mask} onClose={() => setFixing(false)} onApply={(m) => { setFixing(false); cutReady.current = applyMask(photo, m, activeShootIdRef.current).then((cut) => cut, () => null); }} />}
         {authOpen && <AuthModal siteKey={turnstileSiteKey} turnstileEnabled={turnstileEnabled} reason={authReason} onClose={() => setAuthOpen(false)} onDone={(next) => { setMe(next); setAuthOpen(false); }} />}
       </main>
 
