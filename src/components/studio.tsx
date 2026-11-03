@@ -356,6 +356,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         image,
         raw: shots[shot.id]?.raw ?? image,
         headline: shot.headline ?? '',
+        caption: shot.caption ?? '',
         product: { name: pl.product.name, label_text: pl.product.label_text },
         shot: { aspect: shot.aspect, scene: shot.scene, backdrop: shot.backdrop },
         turnstileToken,

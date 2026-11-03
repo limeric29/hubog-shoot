@@ -184,15 +184,23 @@ test('the start token is verified as an animate action and refreshes the session
 
 test('the raw scene is animated and the headline is forwarded for post', async () => {
   const sparkResult = { motion: 'Steam curls upward.', camera: 'drift', voice: 'bright market vendor, quick cheerful pace', lang: 'Filipino' };
-  const { start, seen } = handlers(() => json({ call_id: 'fc-raw' }), {}, undefined, sparkResult);
+  const { start, seen, sparkCalls } = handlers(() => json({ call_id: 'fc-raw' }), {}, undefined, sparkResult);
   const other = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABBJRU5ErkJggg==';
-  const res = await start(post({ ...body, raw: other, headline: 'Freshly Squeezed Daily' }));
+  const res = await start(post({ ...body, raw: other, headline: 'Freshly Squeezed Daily', caption: 'Fresh and comfy for playtime!' }));
   assert.equal(res.status, 200);
   assert.equal(seen[0].body.image_b64, other.replace(/^data:image\/\w+;base64,/, ''));
   assert.equal(seen[0].body.headline, 'Freshly Squeezed Daily');
-  assert.match(seen[0].body.prompt, /Bright market vendor, quick cheerful pace voiceover in Filipino, saying: "Freshly Squeezed Daily"/);
+  assert.match(seen[0].body.prompt, /Bright market vendor, quick cheerful pace voiceover in Filipino, saying: "Fresh and comfy for playtime!"/);
+  assert.match(sparkCalls[0].text, /Spoken line: "Fresh and comfy for playtime!"\. Shown on screen: "Freshly Squeezed Daily"/);
   assert.equal(seen[0].body.voice_desc, undefined);
   assert.equal(seen[0].body.title_style, undefined);
+});
+
+test('the voiceover falls back to the headline when the shot has no caption', async () => {
+  const { start, seen } = handlers(() => json({ call_id: 'fc-caption-fb' }), {});
+  const res = await start(post({ ...body, headline: 'Freshly Squeezed Daily' }));
+  assert.equal(res.status, 200);
+  assert.match(seen[0].body.prompt, /voiceover in English, saying: "Freshly Squeezed Daily"/);
 });
 
 test('a directed title style is forwarded, clamped to implemented options', async () => {
@@ -205,8 +213,8 @@ test('a directed title style is forwarded, clamped to implemented options', asyn
 
 test('a missing designed voice falls back to the default voice in English', async () => {
   const { start, seen } = handlers(() => json({ call_id: 'fc-voice-fb' }), {});
-  const res = await start(post({ ...body, headline: 'Freshly Squeezed Daily' }));
+  const res = await start(post({ ...body, headline: 'Freshly Squeezed Daily', caption: 'Perfect for your little one!' }));
   assert.equal(res.status, 200);
-  assert.match(seen[0].body.prompt, /voiceover in English, saying: "Freshly Squeezed Daily"/);
+  assert.match(seen[0].body.prompt, /voiceover in English, saying: "Perfect for your little one!"/);
   assert.equal(seen[0].body.voice_desc, undefined);
 });

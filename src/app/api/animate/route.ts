@@ -50,6 +50,7 @@ export async function POST(req: Request) {
     // animated in post instead.
     const image = body.raw ? imageUrl(body.raw, 'raw') : imageUrl(body.image, 'image');
     const headline = text(body.headline, 'headline', 120);
+    const caption = text(body.caption, 'caption', 200);
     const aspect = body.shot?.aspect as Aspect;
     if (!ASPECTS.includes(aspect)) throw new Error('aspect is not supported.');
     const sessionCookie = await verifyTurnstile(req, body.turnstileToken, 'animate');
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
       try {
         const dir = await sparkJson<{ motion?: unknown; camera?: unknown; voice?: unknown; lang?: unknown; title?: unknown }>({
           system: ANIMATE_DIRECTOR_SYSTEM,
-          text: animateDirectorText(product, shot, headline),
+          text: animateDirectorText(product, shot, headline, caption),
           images: [image],
           name: 'animate_motion',
           schema: ANIMATE_MOTION_SCHEMA,
@@ -86,10 +87,13 @@ export async function POST(req: Request) {
       }
     }
     const visual = motion ?? animatePrompt(product, shot);
-    // The voiceover is native LTX dialogue: the designed voice speaks the fixed
-    // headline, quoted with speaker and language per the LTX dialogue format.
-    const audio = headline
-      ? `${cap(voiceDesc ?? DEFAULT_VOICE)} voiceover in ${voiceLang ?? 'English'}, saying: "${headline.replace(/"/g, "'")}"`
+    // The voiceover is native LTX dialogue: the designed voice speaks the
+    // caption (the line written to be read aloud), falling back to the
+    // headline when the shot has none — quoted with speaker and language per
+    // the LTX dialogue format.
+    const spoken = caption || headline;
+    const audio = spoken
+      ? `${cap(voiceDesc ?? DEFAULT_VOICE)} voiceover in ${voiceLang ?? 'English'}, saying: "${spoken.replace(/"/g, "'")}"`
       : null;
     const prompt = audio ? `${visual} ${audio}` : visual;
     const call_id = await animateStart(image.replace(/^data:image\/\w+;base64,/, ''), prompt, aspect, camera, {
