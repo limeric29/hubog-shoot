@@ -6,7 +6,7 @@ weights are downloaded. First-frame image conditioning animates the seller's
 chosen scene; the model also generates a matching ambience soundtrack.
 
 Endpoints (all need `Authorization: Bearer $ANIMATE_KEY`):
-  POST /start  {image_b64, prompt, aspect, duration_sec, camera, seed, headline?, voice_desc?, title_style?} -> {call_id}
+  POST /start  {image_b64, prompt, aspect, duration_sec, camera, seed, headline?, title_style?} -> {call_id}
   GET  /status/{call_id} -> {status: running|done|error, ...}
   GET  /result/{call_id} -> the finished MP4 bytes
 
@@ -54,7 +54,6 @@ CAMERA_HINTS = {
 
 app = modal.App(APP_NAME)
 volume = modal.Volume.from_name("weights-ltx25", create_if_missing=False)
-tts_volume = modal.Volume.from_name("weights-voxcpm2", create_if_missing=True)
 
 TORCH_INDEX = "https://download.pytorch.org/whl/cu132"
 LTX_GIT = f"git+https://github.com/Lightricks/LTX-2.git@{LTX_COMMIT}#subdirectory=packages"
@@ -88,20 +87,6 @@ image = (
 # Blackwell kernel decodes a 5 s clip in ~4 s, plenty for one scene at a time.
 
 web_image = modal.Image.debian_slim(python_version="3.12").uv_pip_install("fastapi[standard]")
-
-# Slim TTS image: the 2B VoxCPM2 voice model runs on a cheap A10G, spawned in
-# parallel with the B300 video render instead of blocking it.
-tts_image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .uv_pip_install("torch==2.13.0", index_url=TORCH_INDEX)
-    .uv_pip_install("voxcpm", "soundfile", "numpy")
-    .env({"HF_HUB_DISABLE_TELEMETRY": "1", "HF_HUB_CACHE": "/voxcpm/hf", "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
-)
-# A10G: VoxCPM2's load spike OOMs a 16 GB T4, and L4s would not schedule;
-# 24 GB is still far cheaper than the B300.
-TTS_GPU = "A10G"
-# Fixed seed so one voice description is one voice across a seller's scenes.
-TTS_SEED = 7
 
 with image.imports():
     import torch
@@ -147,21 +132,6 @@ def drawtext_escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace(":", "\\:").replace("%", "\\%").replace("'", "\\'")
 
 
-VOICE_DELAY = 0.4
-
-
-def probe_duration(path: str) -> float:
-    """Media duration in seconds, 0 when unreadable."""
-    try:
-        out = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
-            capture_output=True, text=True,
-        )
-        return max(0.0, float(out.stdout.strip()))
-    except Exception:
-        return 0.0
-
-
 def wrap_headline(headline: str, font, max_width: float) -> list[str]:
     """Greedy word wrap mirroring the stills' drawHeadline (image.ts)."""
     from PIL import ImageDraw
@@ -197,17 +167,17 @@ TITLE_ANIMATIONS = ("fade", "rise", "slide")
 TITLE_COLORS = ("white", "black")
 
 
-def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None, duration: float, width: int, height: int,
+def finish(video_path: str, out_path: str, headline: str, duration: float, width: int, height: int,
            title_style: dict | None = None) -> None:
-    """Composite the animated headline and mix the voiceover over the ambience.
+    """Composite the animated headline over the clip; audio passes through.
 
     Without a directed style the headline mirrors the stills' drawHeadline
     exactly (0.085w bold, wrapped at 0.84w, top at 0.06h, gradient scrim). The
     director may move it (top/center/bottom), pick an entrance (fade/rise/slide)
     and flip it black over bright scenes. Fades in over 0.8 s, holds, fades out
-    over the last 0.7 s. The voice starts at 0.4 s, ambience ducked to 30%.
+    over the last 0.7 s. The voiceover is native LTX dialogue, already in the mix.
     """
-    if not headline and not voice_wav:
+    if not headline:
         os.replace(video_path, out_path)
         return
     from PIL import ImageFont
@@ -233,9 +203,6 @@ def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None,
             scrim_path = "/tmp/scrim.png"
             scrim_png(scrim_path, width, round(top + block + size))
             cmd += ["-loop", "1", "-framerate", str(FPS), "-i", scrim_path]
-    voice_idx = (2 if scrim_path else 1) if headline else 1
-    if voice_wav:
-        cmd += ["-i", voice_wav]
     filters = []
     v_out = "0:v"
     fade_out = max(0.5, duration - 0.7)
@@ -261,31 +228,10 @@ def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None,
             )
             prev = out
         v_out = prev
-    a_out = "0:a?"
-    if voice_wav:
-        # Fit a long line by gently speeding it (capped, stays natural) instead
-        # of chopping it mid-word; trim remains the backstop.
-        chain = f"adelay={int(VOICE_DELAY * 1000)}:all=1"
-        spoken = probe_duration(voice_wav)
-        room = duration - VOICE_DELAY
-        if spoken > room > 0:
-            chain += f",atempo={min(spoken / room, 1.4):.3f}"
-        filters.append(f"[{voice_idx}:a]{chain},atrim=0:{duration:.2f},asetpts=PTS-STARTPTS[vox]")
-        # Ambience may or may not exist; duck it when present, voice alone otherwise.
-        probe = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", video_path],
-            capture_output=True, text=True,
-        )
-        if probe.stdout.strip():
-            filters.append("[0:a]volume=0.3[amb]")
-            # amix halves every input: compensate so the voice stays forward.
-            filters.append("[amb][vox]amix=inputs=2:duration=first:dropout_transition=0,volume=2[a]")
-        else:
-            filters.append("[vox]anull[a]")
-        a_out = "[a]"
-    cmd += ["-filter_complex", ";".join(filters), "-map", v_out, "-map", a_out,
+    # LTX's own audio (ambience plus native dialogue) passes through untouched.
+    cmd += ["-filter_complex", ";".join(filters), "-map", v_out, "-map", "0:a?",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", f"{duration:.2f}", out_path]
+            "-c:a", "copy", "-movflags", "+faststart", "-t", f"{duration:.2f}", out_path]
     print(f"[timing] finish start (filters={len(filters)})", flush=True)
     subprocess.run(cmd, check=True, capture_output=True, timeout=300)
     print("[timing] finish done", flush=True)
@@ -396,77 +342,18 @@ class Animator:
         except Exception:
             raise ValueError("The scene photo could not be read. Try a JPEG or PNG.")
         headline = str(job.get("headline", "") or "")[:120]
-        voice_desc = str(job.get("voice_desc", "") or "")[:200]
-        # Voice and video start together: the A10G speaks while the B300 renders.
-        # The voice wait is short on purpose: a stuck TTS must delay the video
-        # by minutes, never fail it.
-        import time as _time
-
-        t0 = _time.time()
-        tts_call = speak.spawn({"voice_desc": voice_desc, "headline": headline}) if headline and voice_desc else None
         out = "/tmp/animated.mp4"
         mixed = "/tmp/animated.mixed.mp4"
         n_frames, has_audio = self._generate(prompt, int(job.get("seed", 1)), width, height, frames, [first], mixed)
-        print(f"[timing] video done in {round(_time.time() - t0)}s", flush=True)
-        voice_path = None
-        if tts_call is not None:
-            try:
-                wav_bytes = tts_call.get(timeout=240).get("wav")
-                print(f"[timing] voice ready in {round(_time.time() - t0)}s", flush=True)
-                if wav_bytes:
-                    with open("/tmp/voice.wav", "wb") as f:
-                        f.write(wav_bytes)
-                    voice_path = "/tmp/voice.wav"
-            except Exception as e:
-                print(f"[tts] voiceover failed, shipping ambience only: {type(e).__name__}: {e}", flush=True)
         duration = n_frames / FPS
-        finish(mixed, out, headline, voice_path, duration, width, height, job.get("title_style"))
+        finish(mixed, out, headline, duration, width, height, job.get("title_style"))
         with open(out, "rb") as f:
             video = f.read()
-        for p in (out, mixed, first, "/tmp/voice.wav"):
+        for p in (out, mixed, first):
             if os.path.exists(p):
                 os.remove(p)
         return {"video": video, "frames": n_frames, "fps": FPS, "width": width, "height": height,
-                "audio": has_audio or voice_path is not None, "headline": bool(headline), "voice": voice_path is not None}
-
-
-@app.function(image=tts_image, gpu=TTS_GPU, volumes={"/voxcpm": tts_volume}, timeout=600, min_containers=0, max_containers=2,
-              scaledown_window=600)
-def speak(job: dict) -> dict:
-    """Speak the headline with the Spark-designed voice (VoxCPM2 voice design).
-
-    Cheap A10G, spawned in parallel with the B300 video render. Weights persist
-    on the weights-voxcpm2 Volume after the first download. Any failure
-    returns no audio: the clip ships with ambience only.
-    """
-    import io
-    import time as _time
-
-    t0 = _time.time()
-    print(f"[tts] start speak: {job.get('headline', '')[:60]!r}", flush=True)
-    try:
-        import torch
-        from voxcpm import VoxCPM
-
-        tts = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False)
-        print(f"[tts] model ready in {round(_time.time() - t0)}s", flush=True)
-        import soundfile as sf
-
-        torch.manual_seed(TTS_SEED)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(TTS_SEED)
-        wav = tts.generate(
-            text=f"({job['voice_desc']}){job['headline']}",
-            cfg_value=2.0,
-            inference_timesteps=10,
-        )
-        print(f"[tts] inference done in {round(_time.time() - t0)}s", flush=True)
-        buf = io.BytesIO()
-        sf.write(buf, wav, tts.tts_model.sample_rate, format="WAV")
-        return {"wav": buf.getvalue()}
-    except Exception as e:
-        print(f"[tts] synthesis failed: {type(e).__name__}: {e}")
-        return {"wav": None}
+                "audio": has_audio, "headline": bool(headline)}
 
 
 def _web_app():
@@ -499,7 +386,7 @@ def _web_app():
             return {"status": "error", "message": f"{type(e).__module__}.{type(e).__name__}: {e}"[:500]}
         return {"status": "done", "frames": out["frames"], "fps": out["fps"],
                 "width": out["width"], "height": out["height"], "audio": out["audio"], "bytes": len(out["video"]),
-                "headline": out.get("headline", False), "voice": out.get("voice", False)}
+                "headline": out.get("headline", False)}
 
     @web.get("/result/{call_id}")
     def result(call_id: str, _=Depends(check_key)):

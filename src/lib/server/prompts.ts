@@ -128,6 +128,7 @@ export const ANIMATE_MOTION_SCHEMA = {
     motion: desc('2-3 sentences of visual motion direction under 600 characters'),
     camera: { type: 'string', enum: ['slow_push_in', 'static', 'drift'], description: 'The camera move for the clip' },
     voice: desc('Voice design under 200 characters: gender, age, tone and pace fitting this product'),
+    lang: desc('Headline language for the voiceover, e.g. English, Filipino, or Taglish (Filipino-English mix)'),
     title: {
       type: 'object',
       additionalProperties: false,
@@ -150,13 +151,14 @@ Hard rules: the product MUST stay pixel-identical — same shape, colours, label
 
 Describe 2-3 concrete moving elements you can actually see in the frame (steam, leaves, water, cloth, light flicker, drifting particles). Present tense, visual and concise, under 60 words. No preamble, no story, no quality adjectives.
 
-Also design the voiceover voice for this exact product and scene: gender, age, tone, emotion and pace in one short phrase, e.g. "warm woman in her 30s, bright market-vendor energy, quick cheerful pace". Match the product (food: appetizing and warm; skincare: soft and calm; tech: crisp and confident).
+Also design the voiceover voice for this exact product and scene: gender, age, tone, emotion and pace in one short phrase, e.g. "warm woman in her 30s, bright market-vendor energy, quick cheerful pace". Match the product (food: appetizing and warm; skincare: soft and calm; tech: crisp and confident) and the headline language: read which language the headline is written in — English, Filipino, or Taglish mix — and design a matching voice (e.g. Filipina for Filipino). Report it in lang. LTX speaks the headline natively in this voice, so keep the design vivid but the words out — the line itself is fixed.
 
 Also style the on-screen headline. The still photo shows it at the top in white with a fade entrance — keep that default by omitting title unless the frame demands better: anchor center when the top is busy but the middle is clean, bottom when the product sits high; animation rise for calm scenes, slide for energetic ones; color black only over bright, clean backgrounds. Never cover the product.`;
 
-export function animateDirectorText(product: { name: string; label: string }, shot: { scene: string; backdrop: string }) {
+export function animateDirectorText(product: { name: string; label: string }, shot: { scene: string; backdrop: string }, headline = '') {
   const label = product.label ? ` Label reads "${product.label}".` : '';
-  return `Product: ${product.name}.${label} Scene: ${shot.scene || shot.backdrop}. Clip length: 5 seconds.`;
+  const line = headline ? ` Headline spoken and shown: "${headline}".` : '';
+  return `Product: ${product.name}.${label} Scene: ${shot.scene || shot.backdrop}.${line} Clip length: 5 seconds.`;
 }
 
 export function animatePrompt(product: { name: string; label: string }, shot: { scene: string; backdrop: string }) {

@@ -30,8 +30,6 @@ async function modal(path: string, init?: RequestInit): Promise<Response> {
 export interface AnimateExtras {
   /** On-screen headline, composited animated in post so diffusion never touches text. */
   headline?: string;
-  /** VoxCPM2 voice design the GPU speaks the headline with. */
-  voice_desc?: string;
   /** Director-chosen title styling; absent mirrors the still photo. */
   title_style?: { anchor: string; animation: string; color: string };
 }

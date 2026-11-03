@@ -14,6 +14,8 @@ interface TitleStyle {
   color: 'white' | 'black';
 }
 
+const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
 /** Clamp the director's title styling to the animations Modal implements. */
 function readTitleStyle(value: unknown): TitleStyle | null {
   if (!value || typeof value !== 'object') return null;
@@ -55,12 +57,13 @@ export async function POST(req: Request) {
     let motion: string | null = null;
     let camera = 'slow_push_in';
     let voiceDesc: string | null = null;
+    let voiceLang: string | null = null;
     let titleStyle: TitleStyle | null = null;
     for (const open of sparkOpenConfigured() ? [true, false] : [false]) {
       try {
-        const dir = await sparkJson<{ motion?: unknown; camera?: unknown; voice?: unknown; title?: unknown }>({
+        const dir = await sparkJson<{ motion?: unknown; camera?: unknown; voice?: unknown; lang?: unknown; title?: unknown }>({
           system: ANIMATE_DIRECTOR_SYSTEM,
-          text: animateDirectorText(product, shot),
+          text: animateDirectorText(product, shot, headline),
           images: [image],
           name: 'animate_motion',
           schema: ANIMATE_MOTION_SCHEMA,
@@ -69,17 +72,22 @@ export async function POST(req: Request) {
         if (typeof dir?.motion === 'string' && dir.motion.trim()) motion = dir.motion.trim().slice(0, 600);
         if (dir?.camera === 'static' || dir?.camera === 'drift' || dir?.camera === 'slow_push_in') camera = dir.camera;
         if (typeof dir?.voice === 'string' && dir.voice.trim()) voiceDesc = dir.voice.trim().slice(0, 200);
+        if (typeof dir?.lang === 'string' && dir.lang.trim()) voiceLang = dir.lang.trim().slice(0, 40);
         titleStyle = readTitleStyle(dir?.title);
         break;
       } catch (err) {
         console.error(`[animate] direction via ${open ? 'open weights' : '1.3'} failed:`, err instanceof Error ? err.message : err);
       }
     }
-    const prompt = motion ?? animatePrompt(product, shot);
+    const visual = motion ?? animatePrompt(product, shot);
+    // The voiceover is native LTX dialogue: the designed voice speaks the fixed
+    // headline, quoted with speaker and language per the LTX dialogue format.
+    const audio = headline
+      ? `${cap(voiceDesc ?? DEFAULT_VOICE)} voiceover in ${voiceLang ?? 'English'}, saying: "${headline.replace(/"/g, "'")}"`
+      : null;
+    const prompt = audio ? `${visual} ${audio}` : visual;
     const call_id = await animateStart(image.replace(/^data:image\/\w+;base64,/, ''), prompt, aspect, camera, {
       ...(headline ? { headline } : {}),
-      // The designed voice always ships with a headline: VoxCPM2 speaks it on the GPU.
-      ...(headline ? { voice_desc: voiceDesc ?? DEFAULT_VOICE } : {}),
       ...(headline && titleStyle ? { title_style: titleStyle } : {}),
     });
     const response = Response.json({ call_id });
