@@ -12,7 +12,7 @@ import { FixCutout } from './fix-cutout';
 import { ShotCard, type AnimationState, type ShotState } from './shot-card';
 import { Icon } from './icon';
 import { PackPreview } from './pack-preview';
-import { deleteShoot, getShoot, listShoots, saveShoot, videoToDataUrl, type ShootHistoryItem } from '@/lib/client/shoot-history';
+import { deleteShoot, getShoot, listShoots, saveShoot, videoToDataUrl, type SavedShoot, type ShootHistoryItem } from '@/lib/client/shoot-history';
 import styles from './studio.module.css';
 
 type Stage = 'brief' | 'planning' | 'results';
@@ -48,6 +48,14 @@ async function pool<T>(items: T[], size: number, fn: (item: T) => Promise<void>)
       for (let item = queue.shift(); item; item = queue.shift()) await fn(item);
     }),
   );
+}
+
+/** Reflects the current shoot in the URL so it survives reloads and can be bookmarked. */
+function setShootUrl(id: string | null) {
+  const url = new URL(window.location.href);
+  if (id) url.searchParams.set('shoot', id);
+  else url.searchParams.delete('shoot');
+  window.history.replaceState(null, '', url);
 }
 
 export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnabled: boolean; turnstileSiteKey: string }) {
@@ -88,6 +96,8 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   // into the wrong shoot's scenes.
   const activeShootIdRef = useRef('');
   activeShootIdRef.current = activeShootId;
+  /** Modal job ids already being polled, so reopening a shoot never double-polls. */
+  const resumedPolls = useRef<Set<string>>(new Set());
   const recorder = useRef(new Recorder());
   // The real cutout, ready once the main image is done. The fallback for a failed scene waits on it.
   const cutReady = useRef<Promise<HTMLCanvasElement | null>>(Promise.resolve(null));
@@ -125,8 +135,17 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   }, []);
 
   useEffect(() => {
-    void listShoots().then(setHistory).catch(() => setHistoryMessage('Shoot history is unavailable in this browser.'));
+    void listShoots().then((items) => {
+      setHistory(items);
+      // Deep link: reopen the shoot named in the URL, resuming any animation
+      // still running when the tab closed.
+      const id = new URLSearchParams(window.location.search).get('shoot');
+      if (!id) return;
+      if (items.some((item) => item.id === id)) void openPastShoot(id);
+      else setShootUrl(null);
+    }).catch(() => setHistoryMessage('Shoot history is unavailable in this browser.'));
     void fetchMe().then(setMe);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function refreshMe() {
@@ -167,11 +186,15 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
           ...(!finished ? { error: state.error || 'This photo was still being made when you left. Try again.' } : {}),
         }];
       }));
-      const savedAnims: Record<string, { status: 'ready'; video: string }> = {};
+      const savedAnims: NonNullable<SavedShoot['anims']> = {};
       for (const [id, anim] of Object.entries(anims)) {
-        if (anim?.status !== 'ready' || !anim.video) continue;
-        const inline = await videoToDataUrl(anim.video);
-        if (inline) savedAnims[id] = { status: 'ready', video: inline };
+        if (!anim) continue;
+        if (anim.status === 'ready' && anim.video) {
+          const inline = await videoToDataUrl(anim.video);
+          if (inline) savedAnims[id] = { status: 'ready', video: inline };
+        } else if (anim.status === 'working' && anim.callId) {
+          savedAnims[id] = { status: 'working', callId: anim.callId };
+        }
       }
       try {
         await saveShoot({
@@ -271,19 +294,35 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     } catch { /* history unavailable; dropping a late result for an inactive shoot */ }
   }
   async function patchAnimFor(shootId: string, id: string, next: AnimationState) {
-    if (shootId === activeShootIdRef.current) { patchAnim(id, next); return; }
-    if (next.status !== 'ready' || !next.video) return;
+    const active = shootId === activeShootIdRef.current;
+    if (active) patchAnim(id, next);
     try {
-      const saved = await getShoot(shootId);
-      if (!saved) return;
-      const inline = await videoToDataUrl(next.video);
-      if (!inline) return;
-      await saveShoot({
-        ...saved,
-        updatedAt: Date.now(),
-        anims: { ...(saved.anims ?? {}), [id]: { status: 'ready', video: inline } },
-      });
-      setHistory(await listShoots());
+      if (next.status === 'ready' && next.video) {
+        // The active shoot's saver inlines the video; only inactive shoots
+        // need a direct write.
+        if (active) return;
+        const saved = await getShoot(shootId);
+        if (!saved) return;
+        const inline = await videoToDataUrl(next.video);
+        if (!inline) return;
+        await saveShoot({
+          ...saved,
+          updatedAt: Date.now(),
+          anims: { ...(saved.anims ?? {}), [id]: { status: 'ready', video: inline } },
+        });
+        setHistory(await listShoots());
+      } else if (next.status === 'working' && next.callId) {
+        // Write the job id through immediately so a closed tab can resume
+        // polling; never clobber a finished video with an in-flight job.
+        const saved = await getShoot(shootId);
+        if (!saved || saved.anims?.[id]?.status === 'ready') return;
+        await saveShoot({
+          ...saved,
+          updatedAt: Date.now(),
+          anims: { ...(saved.anims ?? {}), [id]: { status: 'working', callId: next.callId } },
+        });
+        if (!active) setHistory(await listShoots());
+      }
     } catch { /* history unavailable; dropping a late result for an inactive shoot */ }
   }
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -303,23 +342,43 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         shot: { aspect: shot.aspect, scene: shot.scene, backdrop: shot.backdrop },
         turnstileToken,
       });
-      // 20 minutes: covers a double cold start; warm runs finish in ~5.
-      for (let i = 0; i < 120; i++) {
-        await sleep(10000);
-        const st = await apiGet<{ status: string; message?: string }>(`/api/animate/${call_id}`);
-        if (st.status === 'done') {
-          guardAnim(shot.id, { status: 'ready', video: `/api/animate/${call_id}/video` });
-          return;
-        }
-        if (st.status === 'error') throw new Error(st.message || 'The animation failed. Please try again.');
-      }
-      throw new Error('The animation is taking too long. Please try again later.');
+      resumedPolls.current.add(call_id);
+      guardAnim(shot.id, { status: 'working', callId: call_id });
+      await pollAnimation(myShoot, shot.id, call_id, false);
     } catch (err) {
       if (!needAuth(err)) guardAnim(shot.id, { status: 'failed', error: message(err) });
       else guardAnim(shot.id, { status: 'failed', error: 'Create a free account to keep animating, then try this scene again.' });
     } finally {
       refreshMe();
     }
+  }
+
+  /** Polls one Modal animation job until it finishes, routing the result to the shoot it belongs to. */
+  async function pollAnimation(myShoot: string, shotId: string, callId: string, resume: boolean) {
+    const guardAnim = (id: string, next: AnimationState) => { void patchAnimFor(myShoot, id, next); };
+    let unreachable = 0;
+    // 20 minutes: covers a double cold start; warm runs finish in ~5.
+    for (let i = 0; i < 120; i++) {
+      await sleep(10000);
+      let st: { status: string; message?: string };
+      try {
+        st = await apiGet<{ status: string; message?: string }>(`/api/animate/${callId}`);
+      } catch (err) {
+        // Fresh jobs fail fast; a resumed job gets a minute of grace before
+        // we conclude the Modal result expired while the tab was closed.
+        if (!resume) throw err;
+        unreachable += 1;
+        if (unreachable >= 6) throw new Error('This animation can no longer be reached. It likely expired while the tab was closed — animate again.');
+        continue;
+      }
+      unreachable = 0;
+      if (st.status === 'done') {
+        guardAnim(shotId, { status: 'ready', video: `/api/animate/${callId}/video` });
+        return;
+      }
+      if (st.status === 'error') throw new Error(st.message || 'The animation failed. Please try again.');
+    }
+    throw new Error('The animation is taking too long. Please try again later.');
   }
 
   function toggleTheme() {
@@ -453,6 +512,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     const shootId = crypto.randomUUID();
     shootCreatedAt.current = Date.now();
     setActiveShootId(shootId);
+    setShootUrl(shootId);
     setStage('planning');
     try {
       const p = await api<Plan>('/api/plan', { photo: photo.url, brief, turnstileToken: turnstileEnabled ? turnstileToken : undefined });
@@ -475,6 +535,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       if (needAuth(err)) setError('');
       else setError(message(err));
       setActiveShootId('');
+      setShootUrl(null);
       setStage('brief');
     } finally {
       resetTurnstile();
@@ -497,12 +558,24 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       setMask(saved.mask);
       cutReady.current = saved.mask ? cutout(saved.photo, saved.mask).catch(() => null) : Promise.resolve(null);
       setActiveShootId(saved.id);
+      setShootUrl(saved.id);
       shootCreatedAt.current = saved.createdAt;
       setAnswer('');
       setCopied('');
       setError('');
       setHistoryOpen(false);
       setStage('results');
+      // Resume any animation still running when the tab closed: the Modal job
+      // kept going, so pick up polling where it left off.
+      for (const [id, anim] of Object.entries(saved.anims ?? {})) {
+        if (!anim || anim.status !== 'working' || !anim.callId || resumedPolls.current.has(anim.callId)) continue;
+        resumedPolls.current.add(anim.callId);
+        const myShoot = saved.id;
+        const callId = anim.callId;
+        void pollAnimation(myShoot, id, callId, true).catch((err: unknown) => {
+          void patchAnimFor(myShoot, id, { status: 'failed', error: message(err) });
+        });
+      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch {
       setHistoryMessage('This shoot could not be opened from browser storage.');
@@ -513,7 +586,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     try {
       await deleteShoot(id);
       setHistory((items) => items.filter((item) => item.id !== id));
-      if (activeShootId === id) setActiveShootId('');
+      if (activeShootId === id) { setActiveShootId(''); setShootUrl(null); }
     } catch {
       setHistoryMessage('This shoot could not be removed from browser storage.');
     }
@@ -818,7 +891,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                   ))}
                   <span className="sr-only" role="status">{copied ? `${copied} copied to clipboard.` : ''}</span>
                 </section>
-                <button type="button" disabled={!settled} onClick={() => setStage('brief')} className={styles.startAgain}><Icon name="refresh" width="17" height="17" />Make photos for another product</button>
+                <button type="button" disabled={!settled} onClick={() => { setShootUrl(null); setStage('brief'); }} className={styles.startAgain}><Icon name="refresh" width="17" height="17" />Make photos for another product</button>
               </aside>
             </div>
           </>

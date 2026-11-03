@@ -25,8 +25,12 @@ export interface SavedShoot {
   plan: Plan;
   shots: Record<string, SavedShotState>;
   mask: Mask | null;
-  /** Finished animations, videos inlined as data URLs so they survive Modal result expiry. */
-  anims?: Record<string, { status: 'ready'; video: string }>;
+  /**
+   * Finished animations, videos inlined as data URLs so they survive Modal
+   * result expiry, plus in-flight jobs as working + callId so reopening the
+   * shoot resumes polling instead of losing the video.
+   */
+  anims?: Record<string, { status: 'ready'; video: string } | { status: 'working'; callId: string }>;
 }
 
 /** Fetch a same-origin video URL into a data URL. Null when too big or unreadable. */

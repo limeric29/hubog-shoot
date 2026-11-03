@@ -38,6 +38,8 @@ export interface AnimationState {
   status: 'working' | 'ready' | 'failed';
   video?: string;
   error?: string;
+  /** Modal job id, kept so a closed tab can resume polling on return. */
+  callId?: string;
 }
 
 export interface AnimateVerify {
