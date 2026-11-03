@@ -429,16 +429,19 @@ def speak(job: dict) -> dict:
     import io
 
     try:
+        import torch
         from voxcpm import VoxCPM
 
         tts = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False)
         import soundfile as sf
 
+        torch.manual_seed(TTS_SEED)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(TTS_SEED)
         wav = tts.generate(
             text=f"({job['voice_desc']}){job['headline']}",
             cfg_value=2.0,
             inference_timesteps=10,
-            seed=TTS_SEED,
         )
         buf = io.BytesIO()
         sf.write(buf, wav, tts.tts_model.sample_rate, format="WAV")
