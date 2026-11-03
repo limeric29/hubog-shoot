@@ -222,7 +222,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     turnstileId.current = window.turnstile.render(turnstileContainer.current, {
       sitekey: turnstileSiteKey,
       action: 'shoot',
-      size: hasPlanQuestion ? 'compact' : 'normal',
+      size: hasPlanQuestion ? 'flexible' : 'normal',
       callback: (token) => {
         setTurnstileToken(token);
         setTurnstileError('');
@@ -253,7 +253,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
     animateWidgetId.current = window.turnstile.render(animateContainer.current, {
       sitekey: turnstileSiteKey,
       action: 'animate',
-      size: 'compact',
+      size: 'flexible',
       callback: (token) => {
         setAnimateAsk(null);
         if (planRef.current) void animateOne(planRef.current, shot, token);
@@ -870,7 +870,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                       <input id="seller-answer" value={answer} onChange={(e) => setAnswer(e.target.value)} disabled={updating} placeholder="Your answer" />
                       <button type="button" disabled={updating || !answer.trim() || (turnstileEnabled && !turnstileToken)} onClick={() => void sendAnswer()} className={styles.smallPrimary}>{updating ? 'Updating…' : 'Update'}</button>
                     </div>
-                    {showTurnstile && turnstileSiteKey && <div ref={turnstileContainer} className={`${styles.turnstileWidget} ${styles.compactTurnstile}`} />}
+                    {showTurnstile && turnstileSiteKey && <div ref={turnstileContainer} className={`${styles.turnstileWidget} ${styles.flexTurnstile}`} />}
                     {turnstileError && <p role="alert">{turnstileError}</p>}
                     {turnstileEnabled && !turnstileError && !turnstileToken && <p>Complete the security check to continue.</p>}
                     <p>We’ll update your listing and the text on your photos.</p>
