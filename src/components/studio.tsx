@@ -6,7 +6,7 @@ import { api, apiCode, apiGet, transcribe } from '@/lib/client/api';
 import { AuthModal, fetchMe, quotaText, type Me } from './auth-modal';
 import { cutout, fitShot, loadPhoto, onWhite, placeOnScene, type Photo } from '@/lib/client/image';
 import { Recorder } from '@/lib/client/voice';
-import { dataUrlBytes, zip } from '@/lib/client/zip';
+import { dataUrlBytes, urlBytes, zip } from '@/lib/client/zip';
 import type { Mask, Plan, Shot, Verdict } from '@/lib/types';
 import { FixCutout } from './fix-cutout';
 import { ShotCard, type AnimationState, type ShotState } from './shot-card';
@@ -659,33 +659,53 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
   const settled = plan ? plan.shots.every((s) => ['done', 'failed'].includes(shots[s.id]?.status ?? '')) : false;
   const readyCount = plan ? plan.shots.filter((s) => shots[s.id]?.status === 'done').length : 0;
+  const readyVideoCount = plan ? plan.shots.filter((s) => anims[s.id]?.status === 'ready' && anims[s.id]?.video).length : 0;
+  const [packing, setPacking] = useState(false);
 
-  /** One zip with every finished image, named by platform, and the listing text to paste. */
-  function downloadPack() {
-    if (!plan) return;
-    const files = plan.shots.flatMap((s, i) => {
-      const image = shots[s.id]?.image;
-      return image ? [{ name: `${i + 1}-${s.platform}-${s.id}.jpg`, data: dataUrlBytes(image) }] : [];
-    });
-    const text = [
-      plan.listing.title,
-      '',
-      plan.listing.description,
-      '',
-      plan.listing.hashtags.map((h) => `#${h}`).join(' '),
-      '',
-      'Captions',
-      ...plan.shots.map((s) => `- ${s.title} (${s.platform}, ${s.aspect}): ${s.caption}`),
-      '',
-      'Images marked "AI-generated scene" use an AI-made background. The main photo and any "original product" image use pixels from your own photo.',
-      'Made with Hubog Shoot.',
-    ].join('\n');
-    files.push({ name: 'listing.txt', data: new TextEncoder().encode(text) });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(zip(files));
-    a.download = `${slug(plan.product.name)}-hubog-pack.zip`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+  /** One zip with every finished image and video, named by platform, and the listing text to paste. */
+  async function downloadPack() {
+    if (!plan || packing) return;
+    setPacking(true);
+    setError('');
+    try {
+      const files = plan.shots.flatMap((s, i) => {
+        const image = shots[s.id]?.image;
+        return image ? [{ name: `${i + 1}-${s.platform}-${s.id}.jpg`, data: dataUrlBytes(image) }] : [];
+      });
+      const skipped: string[] = [];
+      for (let i = 0; i < plan.shots.length; i++) {
+        const s = plan.shots[i];
+        const video = anims[s.id]?.status === 'ready' ? anims[s.id]?.video : undefined;
+        if (!video) continue;
+        const data = await urlBytes(video);
+        if (data) files.push({ name: `${i + 1}-${s.platform}-${s.id}.mp4`, data });
+        else skipped.push(s.title);
+      }
+      const text = [
+        plan.listing.title,
+        '',
+        plan.listing.description,
+        '',
+        plan.listing.hashtags.map((h) => `#${h}`).join(' '),
+        '',
+        'Captions',
+        ...plan.shots.map((s) => `- ${s.title} (${s.platform}, ${s.aspect}): ${s.caption}`),
+        '',
+        'Images marked "AI-generated scene" use an AI-made background. The main photo and any "original product" image use pixels from your own photo.',
+        'Made with Hubog Shoot.',
+      ].join('\n');
+      files.push({ name: 'listing.txt', data: new TextEncoder().encode(text) });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(zip(files));
+      a.download = `${slug(plan.product.name)}-hubog-pack.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+      if (skipped.length) setError(`These videos could not be added to the ZIP — download them from their cards instead: ${skipped.join(', ')}.`);
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setPacking(false);
+    }
   }
 
   const currentStep = stage === 'brief' ? 0 : stage === 'planning' || !settled ? 1 : 2;
@@ -829,11 +849,11 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                 <div><p className={styles.summaryLabel}>Your product</p><h2>{plan.product.name}</h2>{plan.product.label_text && <p className={styles.labelText}>Label reads: {plan.product.label_text}</p>}</div>
               </div>
               <div className={styles.packAction}>
-                <button type="button" disabled={!settled || readyCount === 0} onClick={downloadPack} className={styles.primaryButton}>
-                  {settled ? <Icon name="download" /> : <span className={styles.spinner} />}
-                  {settled ? `Download the pack (${readyCount} photos + listing)` : `Shooting your photos… ${readyCount} of ${plan.shots.length} ready`}
+                <button type="button" disabled={!settled || readyCount === 0 || packing} onClick={() => void downloadPack()} className={styles.primaryButton}>
+                  {settled && !packing ? <Icon name="download" /> : <span className={styles.spinner} />}
+                  {packing ? 'Preparing your pack…' : settled ? `Download the pack (${readyCount} photos${readyVideoCount ? `, ${readyVideoCount} video${readyVideoCount === 1 ? '' : 's'}` : ''} + listing)` : `Shooting your photos… ${readyCount} of ${plan.shots.length} ready`}
                 </button>
-                <p>{settled ? readyCount > 0 ? 'The ZIP includes your photos and listing text.' : 'No photos are ready yet. Try making a failed photo again below.' : 'We check each photo against your original.'}</p>
+                <p>{settled ? packing ? 'Gathering your photos and videos…' : readyCount > 0 ? `The ZIP includes your photos${readyVideoCount ? ' and videos' : ''} and listing text.` : 'No photos are ready yet. Try making a failed photo again below.' : 'We check each photo against your original.'}</p>
               </div>
             </section>
 

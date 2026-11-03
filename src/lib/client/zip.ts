@@ -28,6 +28,18 @@ export function dataUrlBytes(url: string): Uint8Array {
   return bytes;
 }
 
+/** Bytes for a data URL or a same-origin URL. Null when unreadable. */
+export async function urlBytes(url: string): Promise<Uint8Array | null> {
+  try {
+    if (url.startsWith('data:')) return dataUrlBytes(url);
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return new Uint8Array(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 export function zip(files: ZipFile[]): Blob {
   const enc = new TextEncoder();
   const now = new Date();
