@@ -930,7 +930,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                   ))}
                   <span className="sr-only" role="status">{copied ? `${copied} copied to clipboard.` : ''}</span>
                 </section>
-                <button type="button" disabled={!settled} onClick={() => { setShootUrl(null); setStage('brief'); }} className={styles.startAgain}><Icon name="refresh" width="17" height="17" />Make photos for another product</button>
+                <button type="button" disabled={!settled} onClick={() => { setShootUrl(null); setPhoto(null); setBrief(''); setAnswer(''); setError(''); setStage('brief'); }} className={styles.startAgain}><Icon name="refresh" width="17" height="17" />Make photos for another product</button>
               </aside>
             </div>
           </>
