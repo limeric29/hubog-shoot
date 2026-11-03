@@ -78,8 +78,6 @@ image = (
         "openimageio==3.1.18.1",
         "pillow",
         "numpy",
-        "voxcpm",
-        "soundfile",
     )
     # Upstream overrides torch's cuDNN 9.20, which aborts on the first cuDNN
     # SDPA call (see LTX-2's pyproject.toml).
@@ -90,6 +88,18 @@ image = (
 # Blackwell kernel decodes a 5 s clip in ~4 s, plenty for one scene at a time.
 
 web_image = modal.Image.debian_slim(python_version="3.12").uv_pip_install("fastapi[standard]")
+
+# Slim TTS image: the 2B VoxCPM2 voice model runs on a cheap T4, spawned in
+# parallel with the B300 video render instead of blocking it.
+tts_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .uv_pip_install("torch==2.13.0", index_url=TORCH_INDEX)
+    .uv_pip_install("voxcpm", "soundfile", "numpy")
+    .env({"HF_HUB_DISABLE_TELEMETRY": "1", "HF_HUB_CACHE": "/voxcpm/hf"})
+)
+TTS_GPU = "T4"
+# Fixed seed so one voice description is one voice across a seller's scenes.
+TTS_SEED = 7
 
 with image.imports():
     import torch
@@ -196,7 +206,7 @@ def cover_fit(raw: bytes, width: int, height: int) -> str:
 @app.cls(
     image=image,
     gpu=GPU,
-    volumes={WEIGHTS_DIR: volume, "/voxcpm": tts_volume},
+    volumes={WEIGHTS_DIR: volume},
     cpu=16.0,
     timeout=900,
     # Cost-first scaling: nothing warm when idle, one GPU job at a time, and
@@ -282,12 +292,21 @@ class Animator:
             raise ValueError("The scene photo could not be read. Try a JPEG or PNG.")
         headline = str(job.get("headline", "") or "")[:120]
         voice_desc = str(job.get("voice_desc", "") or "")[:200]
-        voice_path = None
-        if headline and voice_desc:
-            voice_path = self._speak(voice_desc, headline)
+        # Voice and video start together: the T4 speaks while the B300 renders.
+        tts_call = speak.spawn({"voice_desc": voice_desc, "headline": headline}) if headline and voice_desc else None
         out = "/tmp/animated.mp4"
         mixed = "/tmp/animated.mixed.mp4"
         n_frames, has_audio = self._generate(prompt, int(job.get("seed", 1)), width, height, frames, [first], mixed)
+        voice_path = None
+        if tts_call is not None:
+            try:
+                wav_bytes = tts_call.get(timeout=540).get("wav")
+                if wav_bytes:
+                    with open("/tmp/voice.wav", "wb") as f:
+                        f.write(wav_bytes)
+                    voice_path = "/tmp/voice.wav"
+            except Exception as e:
+                print(f"[tts] voiceover failed, shipping ambience only: {type(e).__name__}: {e}")
         duration = n_frames / FPS
         finish(mixed, out, headline, voice_path, duration, width)
         with open(out, "rb") as f:
@@ -297,6 +316,36 @@ class Animator:
                 os.remove(p)
         return {"video": video, "frames": n_frames, "fps": FPS, "width": width, "height": height,
                 "audio": has_audio or voice_path is not None, "headline": bool(headline), "voice": voice_path is not None}
+
+
+@app.function(image=tts_image, gpu=TTS_GPU, volumes={"/voxcpm": tts_volume}, timeout=600, min_containers=0, max_containers=2)
+def speak(job: dict) -> dict:
+    """Speak the headline with the Spark-designed voice (VoxCPM2 voice design).
+
+    Cheap T4, spawned in parallel with the B300 video render. Weights persist
+    on the weights-voxcpm2 Volume after the first download. Any failure
+    returns no audio: the clip ships with ambience only.
+    """
+    import io
+
+    try:
+        from voxcpm import VoxCPM
+
+        tts = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False)
+        import soundfile as sf
+
+        wav = tts.generate(
+            text=f"({job['voice_desc']}){job['headline']}",
+            cfg_value=2.0,
+            inference_timesteps=10,
+            seed=TTS_SEED,
+        )
+        buf = io.BytesIO()
+        sf.write(buf, wav, tts.tts_model.sample_rate, format="WAV")
+        return {"wav": buf.getvalue()}
+    except Exception as e:
+        print(f"[tts] synthesis failed: {type(e).__name__}: {e}")
+        return {"wav": None}
 
 
 def _web_app():
@@ -327,29 +376,6 @@ def _web_app():
             return {"status": "running"}
         except Exception as e:
             return {"status": "error", "message": f"{type(e).__module__}.{type(e).__name__}: {e}"[:500]}
-        return {"status": "done", "frames": out["frames"], "fps": out["fps"],
-                "width": out["width"], "height": out["height"], "audio": out["audio"], "bytes": len(out["video"]),
-                "headline": out.get("headline", False), "voice": out.get("voice", False)}
-
-    @web.get("/result/{call_id}")
-    def result(call_id: str, _=Depends(check_key)):
-        try:
-            out = modal.FunctionCall.from_id(call_id).get(timeout=60)
-        except TimeoutError:
-            return JSONResponse({"error": "still running"}, status_code=425)
-        except Exception as e:
-            return JSONResponse({"error": f"{type(e).__name__}: {e}"[:500]}, status_code=500)
-        return Response(content=out["video"], media_type="video/mp4",
-                        headers={"Content-Disposition": 'attachment; filename="animated-scene.mp4"'})
-
-    return web
-
-
-@app.function(image=web_image, secrets=[KEY_SECRET], timeout=120)
-@modal.asgi_app()
-def web():
-    return _web_app()
- "error", "message": f"{type(e).__module__}.{type(e).__name__}: {e}"[:500]}
         return {"status": "done", "frames": out["frames"], "fps": out["fps"],
                 "width": out["width"], "height": out["height"], "audio": out["audio"], "bytes": len(out["video"]),
                 "headline": out.get("headline", False), "voice": out.get("voice", False)}
