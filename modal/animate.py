@@ -145,6 +145,21 @@ def drawtext_escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace(":", "\\:").replace("%", "\\%").replace("'", "\\'")
 
 
+VOICE_DELAY = 0.4
+
+
+def probe_duration(path: str) -> float:
+    """Media duration in seconds, 0 when unreadable."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+            capture_output=True, text=True,
+        )
+        return max(0.0, float(out.stdout.strip()))
+    except Exception:
+        return 0.0
+
+
 def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None, duration: float, width: int) -> None:
     """Composite the animated headline and mix the voiceover over the ambience.
 
@@ -172,7 +187,14 @@ def finish(video_path: str, out_path: str, headline: str, voice_wav: str | None,
         v_out = "[v]"
     a_out = "0:a?"
     if voice_wav:
-        filters.append(f"[1:a]adelay=400:all=1,atrim=0:{duration:.2f},asetpts=PTS-STARTPTS[vox]")
+        # Fit a long line by gently speeding it (capped, stays natural) instead
+        # of chopping it mid-word; trim remains the backstop.
+        chain = f"adelay={int(VOICE_DELAY * 1000)}:all=1"
+        spoken = probe_duration(voice_wav)
+        room = duration - VOICE_DELAY
+        if spoken > room > 0:
+            chain += f",atempo={min(spoken / room, 1.4):.3f}"
+        filters.append(f"[1:a]{chain},atrim=0:{duration:.2f},asetpts=PTS-STARTPTS[vox]")
         # Ambience may or may not exist; duck it when present, voice alone otherwise.
         probe = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", video_path],

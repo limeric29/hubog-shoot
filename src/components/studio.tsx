@@ -154,6 +154,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         return [shot.id, {
           status: finished ? 'done' as const : 'failed' as const,
           ...(state.image ? { image: state.image } : {}),
+          ...(state.raw ? { raw: state.raw } : {}),
           ...(state.real !== undefined ? { real: state.real } : {}),
           ...(state.composite !== undefined ? { composite: state.composite } : {}),
           ...(state.verdict ? { verdict: state.verdict } : {}),
