@@ -394,21 +394,28 @@ class Animator:
             raise ValueError("The scene photo could not be read. Try a JPEG or PNG.")
         headline = str(job.get("headline", "") or "")[:120]
         voice_desc = str(job.get("voice_desc", "") or "")[:200]
-        # Voice and video start together: the T4 speaks while the B300 renders.
+        # Voice and video start together: the A10G speaks while the B300 renders.
+        # The voice wait is short on purpose: a stuck TTS must delay the video
+        # by minutes, never fail it.
+        import time as _time
+
+        t0 = _time.time()
         tts_call = speak.spawn({"voice_desc": voice_desc, "headline": headline}) if headline and voice_desc else None
         out = "/tmp/animated.mp4"
         mixed = "/tmp/animated.mixed.mp4"
         n_frames, has_audio = self._generate(prompt, int(job.get("seed", 1)), width, height, frames, [first], mixed)
+        print(f"[timing] video done in {round(_time.time() - t0)}s", flush=True)
         voice_path = None
         if tts_call is not None:
             try:
-                wav_bytes = tts_call.get(timeout=1200).get("wav")
+                wav_bytes = tts_call.get(timeout=240).get("wav")
+                print(f"[timing] voice ready in {round(_time.time() - t0)}s", flush=True)
                 if wav_bytes:
                     with open("/tmp/voice.wav", "wb") as f:
                         f.write(wav_bytes)
                     voice_path = "/tmp/voice.wav"
             except Exception as e:
-                print(f"[tts] voiceover failed, shipping ambience only: {type(e).__name__}: {e}")
+                print(f"[tts] voiceover failed, shipping ambience only: {type(e).__name__}: {e}", flush=True)
         duration = n_frames / FPS
         finish(mixed, out, headline, voice_path, duration, width, height, job.get("title_style"))
         with open(out, "rb") as f:
@@ -430,12 +437,16 @@ def speak(job: dict) -> dict:
     returns no audio: the clip ships with ambience only.
     """
     import io
+    import time as _time
 
+    t0 = _time.time()
+    print(f"[tts] start speak: {job.get('headline', '')[:60]!r}", flush=True)
     try:
         import torch
         from voxcpm import VoxCPM
 
         tts = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False)
+        print(f"[tts] model ready in {round(_time.time() - t0)}s", flush=True)
         import soundfile as sf
 
         torch.manual_seed(TTS_SEED)
@@ -446,6 +457,7 @@ def speak(job: dict) -> dict:
             cfg_value=2.0,
             inference_timesteps=10,
         )
+        print(f"[tts] inference done in {round(_time.time() - t0)}s", flush=True)
         buf = io.BytesIO()
         sf.write(buf, wav, tts.tts_model.sample_rate, format="WAV")
         return {"wav": buf.getvalue()}
