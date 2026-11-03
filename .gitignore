@@ -53,3 +53,12 @@ next-env.d.ts
 .dev.vars
 .animate-key
 __pycache__/
+
+# Local-only: agent config and internal design artifacts, kept out of the
+# public hackathon repo but preserved in the working tree.
+/.agents/
+skills-lock.json
+AGENTS.md
+docs/brand/
+docs/previews/
+scripts/preview-layouts.mjs
