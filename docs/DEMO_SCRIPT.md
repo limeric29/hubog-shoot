@@ -29,16 +29,18 @@ On screen: results land, 5 of 5. Scroll the pack.
 ## 1:10–1:50 — Listing + animation (the wow)
 
 > "Captions, hashtags, and listing text come with the pack — copy straight into Shopee.
-> And watch this: one click animates any scene. Muse Spark directs the motion,
-> LTX 2.5 renders it on a B300."
+> And watch this: one click animates any scene. Muse Spark Open directs the motion,
+> designs the voice and the music bed — LTX 2.5 renders it all on a B300, speaking
+> my caption out loud."
 
 On screen: copy listing text, click Animate, play the 5-second video full-screen.
 
 ## 1:50–2:30 — Honesty + craft
 
 > "Two things matter to us. First, honesty: AI scenes are labeled AI, and the main
-> photo is always your real product. Second, it's free to try — three shoots and
-> three animations, then a free account for a daily quota."
+> photo is always your real product — if the cutout misses, you tap to outline
+> it yourself. Second, it's free to try — three shoots and three animations,
+> then a free account for a daily quota."
 
 On screen: quota line, "AI-generated scene" badge, sign-in modal briefly.
 
