@@ -14,15 +14,16 @@ On screen: a dull phone photo of a product vs. a finished 5-photo pack, side by 
 
 ## 0:25–1:10 — The shoot (live)
 
-> "I take one photo of my product — this homemade calamansi juice — add one line:
-> 'Homemade calamansi juice, 300ml, ₱120, no preservatives.' And press Make my photos."
+> "I take one photo of my product — this homemade calamansi juice — add one line,
+> typed or spoken through Muse Voice Transcribe: 'Homemade calamansi juice, 300ml,
+> ₱120, no preservatives.' And press Make my photos."
 
 On screen: upload, brief, verification, click. While it works:
 
 > "Muse Spark 1.3 reads the photo and my words, plans the shoot — main, lifestyle,
 > detail, promo — then directs each scene. Every photo is checked against my
 > original, so the label and bottle stay true. If a scene drifts, it reshoots —
-> or places my real cutout on the set."
+> or SAM 3.1's cutout of my real product gets placed on the set."
 
 On screen: results land, 5 of 5. Scroll the pack.
 
