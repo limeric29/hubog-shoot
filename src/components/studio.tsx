@@ -9,7 +9,7 @@ import { Recorder } from '@/lib/client/voice';
 import { dataUrlBytes, urlBytes, zip } from '@/lib/client/zip';
 import type { Mask, Plan, Shot, Verdict } from '@/lib/types';
 import { FixCutout } from './fix-cutout';
-import { ShotCard, type AnimationState, type ShotState } from './shot-card';
+import { PLATFORM, ShotCard, type AnimationState, type ShotState } from './shot-card';
 import { Icon } from './icon';
 import { PackPreview } from './pack-preview';
 import { deleteShoot, getShoot, listShoots, saveShoot, videoToDataUrl, type SavedShoot, type ShootHistoryItem } from '@/lib/client/shoot-history';
@@ -689,7 +689,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         plan.listing.hashtags.map((h) => `#${h}`).join(' '),
         '',
         'Captions',
-        ...plan.shots.map((s) => `- ${s.title} (${s.platform}, ${s.aspect}): ${s.caption}`),
+        ...plan.shots.map((s) => `- ${s.title} (${PLATFORM[s.platform]}, ${s.aspect}): ${s.caption}`),
         '',
         'Images marked "AI-generated scene" use an AI-made background. The main photo and any "original product" image use pixels from your own photo.',
         'Made with Hubog Shoot.',

@@ -32,7 +32,7 @@ const LABEL: Record<ShotStatus, string> = {
   failed: 'Could not make this photo',
 };
 
-const PLATFORM = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok Shop', facebook: 'Facebook Marketplace' } as const;
+export const PLATFORM = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok Shop', facebook: 'Facebook Marketplace' } as const;
 
 export interface AnimationState {
   status: 'working' | 'ready' | 'failed';
