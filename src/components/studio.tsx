@@ -1,7 +1,7 @@
 'use client';
 
 import Script from 'next/script';
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, apiCode, apiGet, transcribe } from '@/lib/client/api';
 import { AuthModal, fetchMe, quotaText, type Me } from './auth-modal';
 import { cutout, fitShot, loadPhoto, onWhite, placeOnScene, type Photo } from '@/lib/client/image';
@@ -15,7 +15,7 @@ import { PackPreview } from './pack-preview';
 import { deleteShoot, getShoot, listShoots, saveShoot, videoToDataUrl, type SavedShoot, type ShootHistoryItem } from '@/lib/client/shoot-history';
 import styles from './studio.module.css';
 
-type Stage = 'brief' | 'planning' | 'review' | 'results';
+type Stage = 'brief' | 'planning' | 'results';
 type Mic = 'idle' | 'recording' | 'transcribing';
 type TurnstileId = string;
 
@@ -56,38 +56,6 @@ function setShootUrl(id: string | null) {
   if (id) url.searchParams.set('shoot', id);
   else url.searchParams.delete('shoot');
   window.history.replaceState(null, '', url);
-}
-
-/** The plan's follow-up question, shared by the review gate and the results sidebar. */
-function QuestionPanel({ id, question, answer, setAnswer, updating, onUpdate, turnstileEnabled, turnstileToken, turnstileError, turnstileSiteKey, showWidget, widgetRef, footnote }: {
-  id: string;
-  question: string;
-  answer: string;
-  setAnswer: (value: string) => void;
-  updating: boolean;
-  onUpdate: () => void;
-  turnstileEnabled: boolean;
-  turnstileToken: string;
-  turnstileError: string;
-  turnstileSiteKey: string;
-  showWidget: boolean;
-  widgetRef: RefObject<HTMLDivElement | null>;
-  footnote: string;
-}) {
-  return (
-    <section className={styles.questionPanel}>
-      <h2>One quick detail</h2>
-      <label htmlFor={id}>{question}</label>
-      <div className={styles.answerRow}>
-        <input id={id} value={answer} onChange={(e) => setAnswer(e.target.value)} disabled={updating} placeholder="Your answer" />
-        <button type="button" disabled={updating || !answer.trim() || (turnstileEnabled && !turnstileToken)} onClick={onUpdate} className={styles.smallPrimary}>{updating ? 'Updating…' : 'Update'}</button>
-      </div>
-      {showWidget && turnstileSiteKey && <div ref={widgetRef} className={`${styles.turnstileWidget} ${styles.flexTurnstile}`} />}
-      {turnstileError && <p role="alert">{turnstileError}</p>}
-      {turnstileEnabled && !turnstileError && !turnstileToken && <p>Complete the security check to continue.</p>}
-      <p>{footnote}</p>
-    </section>
-  );
 }
 
 export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnabled: boolean; turnstileSiteKey: string }) {
@@ -137,7 +105,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
   const cutReady = useRef<Promise<HTMLCanvasElement | null>>(Promise.resolve(null));
 
   const hasPlanQuestion = Boolean(plan?.question);
-  const showTurnstile = turnstileEnabled && (stage === 'brief' || stage === 'planning' || hasPlanQuestion);
+  const showTurnstile = turnstileEnabled && (stage !== 'results' || hasPlanQuestion);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -574,10 +542,13 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       setShots(Object.fromEntries(p.shots.map((s) => [s.id, { status: 'queued' } as ShotState])));
       setAnims({});
       setMask(null);
-      // Review first: the seller approves the cutout and answers the question
-      // before any scene burns GPU time.
-      setStage('review');
+      setStage('results');
       void makeMain(photo, p, shootId);
+      void pool(
+        p.shots.filter((s) => s.kind !== 'main'),
+        3,
+        (s) => shootOne(photo, p, s, brief, shootId),
+      );
     } catch (err) {
       if (shootId !== activeShootIdRef.current) return;
       if (needAuth(err)) setError('');
@@ -589,20 +560,6 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
       resetTurnstile();
       refreshMe();
     }
-  }
-
-  /** The seller approved the cutout: shoot the remaining scenes (the shoot session from planning covers them). */
-  function approve() {
-    if (!photo || !plan || updating) return;
-    const myShoot = activeShootIdRef.current;
-    if (!myShoot) return;
-    setError('');
-    setStage('results');
-    void pool(
-      plan.shots.filter((s) => s.kind !== 'main'),
-      3,
-      (s) => shootOne(photo, plan, s, brief, myShoot),
-    );
   }
 
   async function openPastShoot(id: string) {
@@ -702,8 +659,6 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
   const settled = plan ? plan.shots.every((s) => ['done', 'failed'].includes(shots[s.id]?.status ?? '')) : false;
   const readyCount = plan ? plan.shots.filter((s) => shots[s.id]?.status === 'done').length : 0;
-  /** The main shot offers manual marking only when SAM found nothing to cut out. */
-  const mainMark = (shot: Shot) => shot.kind === 'main' && shots[shot.id]?.status === 'failed' && /cut out/.test(shots[shot.id]?.error ?? '') ? () => setFixing(true) : undefined;
   const readyVideoCount = plan ? plan.shots.filter((s) => anims[s.id]?.status === 'ready' && anims[s.id]?.video).length : 0;
   const [packing, setPacking] = useState(false);
 
@@ -808,8 +763,8 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
         </ol>
         {me && <p className={styles.quotaLine} role="status">{quotaText(me)}{!me.email && <> · <button type="button" className={styles.quotaLink} onClick={() => { setAuthReason(''); setAuthOpen(true); }}>Create a free account for a daily quota</button></>}</p>}
         <div className={styles.intro}>
-          <h1>{stage === 'results' ? settled ? readyCount > 0 ? 'Your photos are ready.' : 'The shoot is finished.' : 'Your shoot is underway.' : stage === 'review' ? 'Check the cutout first.' : <>Start with a photo<br />of your product.</>}</h1>
-          <p>{stage === 'results' ? 'Download each photo as it’s ready. Your listing text is here too.' : stage === 'review' ? 'Approve the product cutout and answer the question, then we’ll make your photos.' : 'Make product photos, captions, and listing text for your shop.'}</p>
+          <h1>{stage === 'results' ? settled ? readyCount > 0 ? 'Your photos are ready.' : 'The shoot is finished.' : 'Your shoot is underway.' : <>Start with a photo<br />of your product.</>}</h1>
+          <p>{stage === 'results' ? 'Download each photo as it’s ready. Your listing text is here too.' : 'Make product photos, captions, and listing text for your shop.'}</p>
         </div>
 
         <section className={styles.history} aria-label="Previous shoots">
@@ -828,7 +783,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                     <div className={styles.historyDetails}>
                       <strong>{item.productName}</strong>
                       <span>{new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' }).format(item.updatedAt)} · {item.readyCount} of {item.shotCount} photos</span>
-                      <button type="button" disabled={stage === 'planning' || stage === 'review' || (stage === 'results' && !settled)} onClick={() => void openPastShoot(item.id)}>Open shoot</button>
+                      <button type="button" disabled={stage === 'planning' || (stage === 'results' && !settled)} onClick={() => void openPastShoot(item.id)}>Open shoot</button>
                     </div>
                     <button type="button" className={styles.removeHistory} disabled={stage === 'planning' || (stage === 'results' && !settled && item.id === activeShootId)} aria-label={`Delete ${item.productName} from previous shoots`} onClick={() => void removePastShoot(item.id)}>×</button>
                   </article>
@@ -841,7 +796,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
         {error && <p role="alert" className={styles.error}>{error}</p>}
 
-        {(stage === 'brief' || stage === 'planning') && (
+        {stage !== 'results' && (
           <div className={styles.workspace}>
             <section className={styles.briefPanel} aria-label="Set up your shoot" aria-busy={stage === 'planning'}>
               <div className={styles.fieldHeading}>
@@ -899,53 +854,6 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
           </div>
         )}
 
-        {stage === 'review' && plan && photo && (
-          <div className={styles.reviewWrap}>
-            <div className={styles.reviewCutout}>
-              {plan.shots.filter((shot) => shot.kind === 'main').map((shot) => (
-                <ShotCard
-                  key={shot.id}
-                  shot={shot}
-                  state={shots[shot.id] ?? { status: 'queued' }}
-                  fileName={slug(plan.product.name)}
-                  onRedo={() => void makeMain(photo, plan, activeShootIdRef.current)}
-                  onFix={() => setFixing(true)}
-                  onMark={mainMark(shot)}
-                />
-              ))}
-            </div>
-            {plan.question && (
-              <QuestionPanel
-                id="review-answer"
-                question={plan.question}
-                answer={answer}
-                setAnswer={setAnswer}
-                updating={updating}
-                onUpdate={() => void sendAnswer()}
-                turnstileEnabled={turnstileEnabled}
-                turnstileToken={turnstileToken}
-                turnstileError={turnstileError}
-                turnstileSiteKey={turnstileSiteKey}
-                showWidget={showTurnstile}
-                widgetRef={turnstileContainer}
-                footnote="We’ll use your answer in the listing and photo text."
-              />
-            )}
-            <div className={styles.reviewActions}>
-              <button
-                type="button"
-                disabled={updating || plan.shots.some((s) => s.kind === 'main' && !['done', 'failed'].includes(shots[s.id]?.status ?? ''))}
-                onClick={approve}
-                className={styles.primaryButton}
-              >
-                <Icon name="camera" />
-                {`Looks good — make ${plan.shots.filter((s) => s.kind !== 'main').length} photos`}
-              </button>
-              <button type="button" onClick={() => setStage('brief')} className={styles.startAgain}>Back to edit</button>
-            </div>
-          </div>
-        )}
-
         {stage === 'results' && plan && photo && (
           <>
             <section className={styles.resultsSummary} aria-label="Your shoot">
@@ -985,7 +893,7 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
                       fileName={slug(plan.product.name)}
                       onRedo={() => void (shot.kind === 'main' ? makeMain(photo, plan, activeShootIdRef.current) : shootOne(photo, plan, shot, brief, activeShootIdRef.current))}
                       onFix={shot.kind === 'main' ? () => setFixing(true) : undefined}
-                      onMark={mainMark(shot)}
+                      onMark={shot.kind === 'main' && shots[shot.id]?.status === 'failed' && /cut out/.test(shots[shot.id]?.error ?? '') ? () => setFixing(true) : undefined}
                     />
                   ))}
                   {plan.shots.filter((shot) => shot.kind !== 'main').map((shot) => (
@@ -1009,21 +917,18 @@ export function Studio({ turnstileEnabled, turnstileSiteKey }: { turnstileEnable
 
               <aside className={styles.listingSidebar} aria-label="Listing details">
                 {plan.question && (
-                  <QuestionPanel
-                    id="seller-answer"
-                    question={plan.question}
-                    answer={answer}
-                    setAnswer={setAnswer}
-                    updating={updating}
-                    onUpdate={() => void sendAnswer()}
-                    turnstileEnabled={turnstileEnabled}
-                    turnstileToken={turnstileToken}
-                    turnstileError={turnstileError}
-                    turnstileSiteKey={turnstileSiteKey}
-                    showWidget={showTurnstile}
-                    widgetRef={turnstileContainer}
-                    footnote="We’ll update your listing and the text on your photos."
-                  />
+                  <section className={styles.questionPanel}>
+                    <h2>One quick detail</h2>
+                    <label htmlFor="seller-answer">{plan.question}</label>
+                    <div className={styles.answerRow}>
+                      <input id="seller-answer" value={answer} onChange={(e) => setAnswer(e.target.value)} disabled={updating} placeholder="Your answer" />
+                      <button type="button" disabled={updating || !answer.trim() || (turnstileEnabled && !turnstileToken)} onClick={() => void sendAnswer()} className={styles.smallPrimary}>{updating ? 'Updating…' : 'Update'}</button>
+                    </div>
+                    {showTurnstile && turnstileSiteKey && <div ref={turnstileContainer} className={`${styles.turnstileWidget} ${styles.flexTurnstile}`} />}
+                    {turnstileError && <p role="alert">{turnstileError}</p>}
+                    {turnstileEnabled && !turnstileError && !turnstileToken && <p>Complete the security check to continue.</p>}
+                    <p>We’ll update your listing and the text on your photos.</p>
+                  </section>
                 )}
                 <section className={styles.listingPanel}>
                   <div className={styles.listingHeading}><Icon name="copy" /><h2>Your listing</h2></div>

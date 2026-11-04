@@ -188,9 +188,6 @@
 .answerRow input { width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--line-field); border-radius: 8px; background: var(--card); padding: 8px 10px; font-size: 14px; }
 .smallPrimary { border-radius: 10px; background: var(--button-bg); padding: 8px 12px; color: var(--hubog-white); font-size: 12px; font-weight: 600; }
 .smallPrimary:disabled { opacity: .5; }
-.reviewWrap { display: grid; gap: 20px; max-width: 720px; }
-.reviewCutout { max-width: 420px; }
-.reviewActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
 .questionPanel > p { margin-top: 9px; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
 .startAgain { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border-radius: 10px; padding: 10px; color: var(--accent); font-size: 12px; font-weight: 600; }
 .startAgain:hover:not(:disabled) { background: var(--accent-soft); }
