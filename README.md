@@ -1,6 +1,6 @@
 # Hubog Shoot
 
-A product-photo studio for small sellers in the Philippines. You upload one phone photo and describe the product in English, Filipino or Taglish. A Muse Spark agent plans the shoot, Muse Image renders the listing photos and promo creatives, and SAM 3.1 cleans up the product with a tap. You download a pack sized for Shopee, Lazada, TikTok Shop and Facebook, with captions.
+A product-photo studio for small sellers in the Philippines. You upload one phone photo and describe the product in English, Filipino or Taglish. A Muse Spark agent plans the shoot, Muse Image renders the listing photos and promo creatives, and SAM 3.1 cleans up the product with a tap. You download a pack sized for Shopee, Lazada, TikTok Shop and Facebook Marketplace, with captions.
 
 *Hubog* means "to shape" in Filipino.
 

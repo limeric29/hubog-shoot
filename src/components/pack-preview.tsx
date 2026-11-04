@@ -31,7 +31,7 @@ export function PackPreview() {
             <div><strong>Everything for your listing</strong><p>5 photos, captions, and listing text.</p></div>
           </div>
           <div className={styles.platforms} aria-label="Works for these selling channels">
-            <span>Shopee</span><span>Lazada</span><span>TikTok Shop</span><span>Facebook</span>
+            <span>Shopee</span><span>Lazada</span><span>TikTok Shop</span><span>Facebook Marketplace</span>
           </div>
           <p className={styles.exampleNote}>Examples shown. Lifestyle and promo backgrounds are AI-generated.</p>
         </div>
