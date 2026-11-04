@@ -19,7 +19,7 @@ On screen: a dull phone photo of a product vs. a finished 5-photo pack, side by 
 
 On screen: upload, brief, verification, click. While it works:
 
-> "Muse Spark reads the photo and my words, plans the shoot — main, lifestyle,
+> "Muse Spark 1.3 reads the photo and my words, plans the shoot — main, lifestyle,
 > detail, promo — then directs each scene. Every photo is checked against my
 > original, so the label and bottle stay true. If a scene drifts, it reshoots —
 > or places my real cutout on the set."
@@ -29,9 +29,9 @@ On screen: results land, 5 of 5. Scroll the pack.
 ## 1:10–1:50 — Listing + animation (the wow)
 
 > "Captions, hashtags, and listing text come with the pack — copy straight into Shopee.
-> And watch this: one click animates any scene. Muse Spark Open directs the motion,
-> designs the voice and the music bed — LTX 2.5 renders it all on a B300, speaking
-> my caption out loud."
+> And watch this: one click animates any scene. Muse Spark Open, served on Baseten,
+> directs the motion and designs the voice and the music bed — with Spark 1.3 as
+> fallback — then LTX 2.5 renders it all on a Modal GPU, speaking my caption out loud."
 
 On screen: copy listing text, click Animate, play the 5-second video full-screen.
 
